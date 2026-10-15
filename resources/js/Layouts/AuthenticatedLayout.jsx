@@ -145,7 +145,7 @@ export default function AuthenticatedLayout({ header, children }) {
                     </div>
                 </div>
 
-                {header && <header className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 sm:pt-8 lg:px-8">{header}</header>}
+                {header && <header className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">{header}</header>}
 
                 {(flash?.success || pageError) && (
                     <div className="mx-auto mt-4 max-w-7xl px-2 sm:px-6 lg:px-8">

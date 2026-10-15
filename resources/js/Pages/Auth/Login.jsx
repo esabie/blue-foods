@@ -45,7 +45,7 @@ export default function Login({ status }) {
                         name="email"
                         value={data.email}
                         className="mt-1 block w-full py-2.5"
-                        placeholder="you@example.com"
+                        placeholder="m@example.com"
                         autoComplete="username"
                         isFocused={true}
                         onChange={(e) => setData('email', e.target.value)}
@@ -68,27 +68,11 @@ export default function Login({ status }) {
                         value={data.password}
                         containerClassName="mt-1"
                         className="block w-full py-2.5"
-                        placeholder="Enter your password"
                         autoComplete="current-password"
                         onChange={(e) => setData('password', e.target.value)}
                     />
 
                     <InputError message={errors.password} className="mt-2" />
-                </div>
-
-                <div className="mt-5 block">
-                    <label className="flex items-center">
-                        <Checkbox
-                            name="remember"
-                            checked={data.remember}
-                            onChange={(e) =>
-                                setData('remember', e.target.checked)
-                            }
-                        />
-                        <span className="ms-2 text-sm text-gray-600">
-                            Remember me
-                        </span>
-                    </label>
                 </div>
 
                 <PrimaryButton className="mt-6 w-full py-3" disabled={processing}>

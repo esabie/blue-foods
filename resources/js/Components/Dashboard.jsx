@@ -207,14 +207,14 @@ export default function DashboardShell({ title, filters, products, generatedAt, 
     return (
         <PageShell title={title}>
             {tabs.length > 1 && (
-                <nav className="-mt-2 flex gap-1 overflow-x-auto border-b border-gray-200">
+                <nav className="-mt-1 flex gap-1 overflow-x-auto border-b border-gray-200">
                     {tabs.map(([label, name]) => (
                         <Link
                             key={name}
                             href={route(name, query)}
                             preserveScroll
                             className={
-                                '-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ' +
+                                '-mb-px whitespace-nowrap border-b-2 px-3 py-1.5 text-sm font-medium ' +
                                 (route().current(name) ? 'border-sky-700 text-gray-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700')
                             }
                         >
@@ -233,11 +233,11 @@ export default function DashboardShell({ title, filters, products, generatedAt, 
 export function ChartCard({ title, children, action, className = '' }) {
     return (
         <section className={'min-w-0 rounded-xl bg-white ring-1 ring-gray-200 ' + className}>
-            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
                 <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
                 {action}
             </div>
-            <div className="p-4">{children}</div>
+            <div className="p-3">{children}</div>
         </section>
     );
 }

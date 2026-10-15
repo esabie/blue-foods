@@ -43,9 +43,9 @@ export default function Overview({ headline, revenueByMonth, members, attention,
                 />
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-3">
                 <ChartCard title="Revenue by month" className="lg:col-span-2">
-                    <div className="h-72">
+                    <div className="h-56">
                         <ResponsiveContainer>
                             <BarChart data={revenueByMonth} margin={{ left: 0, right: 8 }}>
                                 <CartesianGrid {...GRID} vertical={false} />
@@ -62,7 +62,7 @@ export default function Overview({ headline, revenueByMonth, members, attention,
 
                 <ChartCard title="Where the stock is">
                     {headline.stock_remaining > 0 ? (
-                        <div className="h-72">
+                        <div className="h-56">
                             <ResponsiveContainer>
                                 <PieChart>
                                     <Pie data={where} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="85%" paddingAngle={2} stroke="none">
@@ -81,7 +81,7 @@ export default function Overview({ headline, revenueByMonth, members, attention,
                 </ChartCard>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-3">
                 <ChartCard
                     title="Performance by team member"
                     className="lg:col-span-2"

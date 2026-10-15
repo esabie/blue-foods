@@ -7,14 +7,14 @@ export default function PageShell({ title, actions, children }) {
         <AuthenticatedLayout
             header={
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{title}</h1>
+                    <h1 className="text-xl font-semibold tracking-tight text-gray-900 sm:text-2xl">{title}</h1>
                     {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
                 </div>
             }
         >
             <Head title={title} />
-            <div className="pb-10 pt-5">
-                <div className="mx-auto max-w-7xl space-y-6 px-2 sm:px-6 lg:px-8">{children}</div>
+            <div className="pb-8 pt-3">
+                <div className="mx-auto max-w-7xl space-y-4 px-2 sm:px-6 lg:px-8">{children}</div>
             </div>
         </AuthenticatedLayout>
     );
@@ -57,7 +57,7 @@ export function Stat({ label, value, tone = 'default', icon, accent = 'sky', hin
     };
 
     return (
-        <div className="flex flex-col rounded-xl bg-white p-4 ring-1 ring-gray-200">
+        <div className="flex flex-col rounded-xl bg-white px-3.5 py-3 ring-1 ring-gray-200">
             <div className="flex items-start justify-between gap-2">
                 <span className="pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{label}</span>
                 {icon && (
@@ -66,11 +66,11 @@ export function Stat({ label, value, tone = 'default', icon, accent = 'sky', hin
                     </span>
                 )}
             </div>
-            <div className="mt-auto pt-3">
+            <div className="mt-auto pt-2">
                 <div className={'text-lg font-semibold tabular-nums tracking-tight sm:text-xl ' + tones[tone]}>{value}</div>
-                {hint && <div className="mt-1 text-xs text-gray-500">{hint}</div>}
+                {hint && <div className="mt-0.5 text-xs text-gray-500">{hint}</div>}
                 {progress !== undefined && (
-                    <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
                         <div className="h-full rounded-full bg-teal-500" style={{ width: `${Math.min(100, Math.max(0, progress ?? 0))}%` }} />
                     </div>
                 )}
