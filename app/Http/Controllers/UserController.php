@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Enums\Role;
 use App\Enums\UserStatus;
+use App\Models\Sale;
 use App\Models\User;
+use App\Services\CashBook;
 use App\Support\Phone;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
@@ -15,8 +19,17 @@ use Inertia\Response;
 
 class UserController extends Controller
 {
-    public function index(): Response
+    public function index(CashBook $cash): Response
     {
+        $held = DB::table('stock_balances as b')
+            ->join('locations as l', 'l.id', '=', 'b.location_id')
+            ->whereNotNull('l.user_id')
+            ->groupBy('l.user_id')
+            ->selectRaw('l.user_id, SUM(b.quantity) AS units')
+            ->pluck('units', 'user_id');
+        $lastSale = Sale::notReversed()->groupBy('member_user_id')->selectRaw('member_user_id, MAX(created_at) AS at')->pluck('at', 'member_user_id');
+        $owed = $cash->positions()->keyBy('user_id');
+
         $users = User::human()->orderBy('status')->orderBy('name')->get()->map(fn (User $user) => [
             'id' => $user->id,
             'name' => $user->name,
@@ -27,6 +40,13 @@ class UserController extends Controller
             'status' => $user->status->value,
             'locked' => $user->isLocked(),
             'created_at' => $user->created_at?->toIso8601String(),
+            'last_login_at' => $user->last_login_at?->toIso8601String(),
+            'team' => $user->role === Role::Marketing ? [
+                'units_held' => (int) ($held[$user->id] ?? 0),
+                'cash_owed_pesewas' => $owed[$user->id]['outstanding_pesewas'] ?? 0,
+                'cash_overdue' => $owed[$user->id]['overdue'] ?? false,
+                'last_sale_at' => isset($lastSale[$user->id]) ? CarbonImmutable::parse($lastSale[$user->id], 'UTC')->toIso8601String() : null,
+            ] : null,
         ]);
 
         return Inertia::render('Users/Index', [
@@ -124,8 +144,8 @@ class UserController extends Controller
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'required_without:phone', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user?->id)],
-            'phone' => ['nullable', 'required_without:email', 'regex:/^\+\d{9,15}$/', Rule::unique('users', 'phone')->ignore($user?->id)],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user?->id)],
+            'phone' => ['nullable', 'regex:/^\+\d{9,15}$/', Rule::unique('users', 'phone')->ignore($user?->id)],
         ];
     }
 }

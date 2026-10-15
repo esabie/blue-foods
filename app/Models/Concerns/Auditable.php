@@ -33,7 +33,7 @@ trait Auditable
     public function auditable(array $attributes): array
     {
         return Arr::except($attributes, [
-            'password', 'remember_token', 'updated_at', 'failed_login_attempts',
+            'password', 'remember_token', 'updated_at', 'failed_login_attempts', 'last_login_at',
         ]);
     }
 }

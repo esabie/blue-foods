@@ -1,14 +1,15 @@
 import Checkbox from '@/Components/Checkbox';
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
+import PasswordInput from '@/Components/PasswordInput';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 
 export default function Login({ status }) {
     const { data, setData, post, processing, errors, reset } = useForm({
-        login: '',
+        email: '',
         password: '',
         remember: false,
     });
@@ -25,39 +26,49 @@ export default function Login({ status }) {
         <GuestLayout>
             <Head title="Log in" />
 
+            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Login to your account</h1>
+            <p className="mt-2 text-sm text-gray-500">Enter your email below to login to your account.</p>
+
             {status && (
-                <div className="mb-4 text-sm font-medium text-green-600">
+                <div className="mt-6 rounded-md bg-green-50 px-3 py-2 text-sm font-medium text-green-700">
                     {status}
                 </div>
             )}
 
-            <form onSubmit={submit}>
+            <form onSubmit={submit} className="mt-8">
                 <div>
-                    <InputLabel htmlFor="login" value="Email or phone number" />
+                    <InputLabel htmlFor="email" value="Email" />
 
                     <TextInput
-                        id="login"
-                        type="text"
-                        name="login"
-                        value={data.login}
-                        className="mt-1 block w-full"
+                        id="email"
+                        type="email"
+                        name="email"
+                        value={data.email}
+                        className="mt-1 block w-full py-2.5"
+                        placeholder="you@example.com"
                         autoComplete="username"
                         isFocused={true}
-                        onChange={(e) => setData('login', e.target.value)}
+                        onChange={(e) => setData('email', e.target.value)}
                     />
 
-                    <InputError message={errors.login} className="mt-2" />
+                    <InputError message={errors.email} className="mt-2" />
                 </div>
 
-                <div className="mt-4">
-                    <InputLabel htmlFor="password" value="Password" />
+                <div className="mt-5">
+                    <div className="flex items-center justify-between">
+                        <InputLabel htmlFor="password" value="Password" />
+                        <Link href={route('password.request')} className="text-sm font-medium text-sky-700 hover:text-sky-900 hover:underline">
+                            Forgot password?
+                        </Link>
+                    </div>
 
-                    <TextInput
+                    <PasswordInput
                         id="password"
-                        type="password"
                         name="password"
                         value={data.password}
-                        className="mt-1 block w-full"
+                        containerClassName="mt-1"
+                        className="block w-full py-2.5"
+                        placeholder="Enter your password"
                         autoComplete="current-password"
                         onChange={(e) => setData('password', e.target.value)}
                     />
@@ -65,7 +76,7 @@ export default function Login({ status }) {
                     <InputError message={errors.password} className="mt-2" />
                 </div>
 
-                <div className="mt-4 block">
+                <div className="mt-5 block">
                     <label className="flex items-center">
                         <Checkbox
                             name="remember"
@@ -80,15 +91,9 @@ export default function Login({ status }) {
                     </label>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between">
-                    <p className="text-xs text-gray-500">
-                        Forgot your password? Ask management to reset it.
-                    </p>
-
-                    <PrimaryButton className="ms-4" disabled={processing}>
-                        Log in
-                    </PrimaryButton>
-                </div>
+                <PrimaryButton className="mt-6 w-full py-3" disabled={processing}>
+                    Log in
+                </PrimaryButton>
             </form>
         </GuestLayout>
     );

@@ -6,6 +6,7 @@ use App\Enums\ProductStatus;
 use App\Models\Product;
 use App\Models\ProductCost;
 use App\Models\ProductPrice;
+use App\Services\StockPosition;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -18,12 +19,20 @@ use Inertia\Response;
 
 class ProductController extends Controller
 {
-    public function index(): Response
+    public function index(StockPosition $position): Response
     {
-        $products = Product::with(['prices.setter:id,name', 'costs.setter:id,name'])
+        $products = Product::with(['prices.setter:id,name', 'costs.setter:id,name', 'currentPrice'])
             ->orderBy('status')
             ->orderBy('name')
-            ->get()
+            ->get();
+        $stock = $position->byProduct($products)->keyBy('product_id');
+        $sold30 = DB::table('effective_sales')
+            ->where('occurred_at', '>=', now()->subDays(30))
+            ->groupBy('product_id')
+            ->selectRaw('product_id, SUM(quantity) AS units')
+            ->pluck('units', 'product_id');
+
+        $products = $products
             ->map(fn (Product $product) => [
                 'id' => $product->id,
                 'sku' => $product->sku,
@@ -50,6 +59,10 @@ class ProductController extends Controller
                     'set_by' => $cost->setter?->name,
                     'set_at' => $cost->created_at?->toIso8601String(),
                 ]),
+                'stock' => [
+                    ...collect($stock[$product->id])->only(['unassigned', 'with_team', 'online', 'remaining', 'low_stock'])->all(),
+                    'sold_30_days' => (int) ($sold30[$product->id] ?? 0),
+                ],
             ]);
 
         return Inertia::render('Products/Index', ['products' => $products]);

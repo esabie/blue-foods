@@ -21,11 +21,13 @@ export default function StockIndex({ products, members, recentMovements, adjustm
             withTeam: sum.withTeam + p.with_team,
             online: sum.online + p.online,
             remaining: sum.remaining + p.remaining,
+            sold: sum.sold + p.sold,
             value: sum.value + p.value_remaining_pesewas,
             low: sum.low + (p.low_stock && p.status === 'active' ? 1 : 0),
         }),
-        { produced: 0, unassigned: 0, withTeam: 0, online: 0, remaining: 0, value: 0, low: 0 },
+        { produced: 0, unassigned: 0, withTeam: 0, online: 0, remaining: 0, sold: 0, value: 0, low: 0 },
     );
+    const share = (part, whole) => (whole > 0 ? `${Math.round((part / whole) * 1000) / 10}%` : '—');
 
     return (
         <PageShell
@@ -41,13 +43,16 @@ export default function StockIndex({ products, members, recentMovements, adjustm
                 </>
             }
         >
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-                <Stat label="Units produced" value={totals.produced.toLocaleString()} icon="plus" accent="sky" />
-                <Stat label="Stock remaining" value={totals.remaining.toLocaleString()} icon="cube" accent="violet" />
-                <Stat label="Not yet assigned" value={totals.unassigned.toLocaleString()} icon="archive" accent="amber" />
-                <Stat label="With marketing team" value={totals.withTeam.toLocaleString()} icon="team" accent="indigo" />
-                <Stat label="Value remaining" value={formatGhs(totals.value)} icon="banknotes" accent="emerald" />
-                <Stat label="Below reorder level" value={totals.low} tone={totals.low > 0 ? 'warn' : 'default'} icon="warning" accent={totals.low > 0 ? 'amber' : 'gray'} />
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <Stat label="Stock remaining" value={totals.remaining.toLocaleString()} icon="cube" accent="violet" hint="Warehouse + team + online shop" />
+                <Stat label="Not yet assigned" value={totals.unassigned.toLocaleString()} icon="archive" accent="amber" hint={`In the warehouse · ${share(totals.unassigned, totals.remaining)}`} />
+                <Stat label="With marketing team" value={totals.withTeam.toLocaleString()} icon="team" accent="indigo" hint={`${share(totals.withTeam, totals.remaining)} of stock remaining`} />
+                <Stat label="In online shop" value={totals.online.toLocaleString()} icon="shop" accent="teal" hint={`${share(totals.online, totals.remaining)} of stock remaining`} />
+                <Stat label="Units produced" value={totals.produced.toLocaleString()} icon="plus" accent="sky" hint="All time" />
+                <Stat label="Units sold" value={totals.sold.toLocaleString()} icon="bag" accent="emerald" hint="Team and online, all time" />
+                <Stat label="Value remaining" value={formatGhs(totals.value)} icon="banknotes" accent="emerald" hint="At current prices" />
+                <Stat label="Below reorder level" value={totals.low} tone={totals.low > 0 ? 'warn' : 'default'} icon="warning" accent={totals.low > 0 ? 'amber' : 'gray'}
+                    hint={totals.low > 0 ? 'Warehouse stock to top up' : 'Warehouse stock is enough'} />
             </div>
 
             <Card title="Stock by product">

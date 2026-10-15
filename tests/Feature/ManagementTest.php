@@ -85,23 +85,69 @@ test('cost changes are kept as history, may be backdated but not set in the futu
         ->where('products.0.cost_history.0.set_by', $this->manager->name));
 });
 
+test('the users page shows each member\'s stock, cash to hand in and last sign-in', function () {
+    $this->travelTo(CarbonImmutable::parse('2026-03-01 10:00', 'UTC'));
+    $w = stockWorld(2500);
+    ledger()->produce($w->product, 10, $w->warehouse);
+    ledger()->assign($w->product, $w->member, 6, $w->manager);
+    ledger()->recordSale($w->member, $w->product, 2);
+
+    $this->travelTo(CarbonImmutable::parse('2026-03-10 09:00', 'UTC'));
+    $this->post(route('login'), ['email' => $w->member->email, 'password' => 'password'])->assertRedirect();
+    $this->post(route('logout'));
+
+    expect($w->member->fresh()->last_login_at->toDateTimeString())->toBe('2026-03-10 09:00:00')
+        ->and(AuditLog::where('entity', 'user')->where('action', 'updated')->exists())->toBeFalse();
+
+    $users = collect($this->actingAs($w->manager)->get(route('users.index'))->viewData('page')['props']['users'])->keyBy('id');
+    expect($users[$w->member->id]['team'])->toBe([
+        'units_held' => 4,
+        'cash_owed_pesewas' => 5000,
+        'cash_overdue' => true,
+        'last_sale_at' => '2026-03-01T10:00:00+00:00',
+    ])->and($users[$w->member->id]['last_login_at'])->toBe('2026-03-10T09:00:00+00:00')
+        ->and($users[$w->manager->id]['team'])->toBeNull()
+        ->and($users[$w->manager->id]['last_login_at'])->toBeNull();
+});
+
+test('the products page shows where the stock is and recent sales', function () {
+    $w = stockWorld();
+    $w->product->update(['reorder_level' => 5]);
+    ledger()->produce($w->product, 10, $w->warehouse);
+    ledger()->assign($w->product, $w->member, 6, $w->manager);
+    ledger()->allocateOnline($w->product, 1, $w->manager);
+    ledger()->recordSale($w->member, $w->product, 2);
+
+    $this->actingAs($w->manager)->get(route('products.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('products.0.stock', [
+            'unassigned' => 3, 'with_team' => 4, 'online' => 1, 'remaining' => 8, 'low_stock' => true, 'sold_30_days' => 2,
+        ]));
+});
+
 test('U1: creating a marketing user gives them their own stock location', function () {
     $this->actingAs($this->manager)->post(route('users.store'), [
         'name' => 'Kofi Mensah',
+        'email' => 'Kofi@BlueFoods.test',
         'phone' => '024 555 1234',
         'role' => 'marketing',
         'password' => 'temporary-pass',
     ])->assertSessionHasNoErrors();
 
-    $user = User::where('phone', '+233245551234')->sole();
+    $user = User::where('email', 'kofi@bluefoods.test')->sole();
     expect($user->location->type)->toBe(LocationType::Member)
-        ->and($user->email)->toBeNull();
+        ->and($user->phone)->toBe('+233245551234');
 });
 
-test('U1: a user needs a phone number or an email', function () {
+test('U1: a user needs an email to sign in with; a phone number is optional', function () {
     $this->actingAs($this->manager)->post(route('users.store'), [
-        'name' => 'No Contact', 'role' => 'warehouse', 'password' => 'temporary-pass',
-    ])->assertSessionHasErrors(['phone', 'email']);
+        'name' => 'Phone Only', 'phone' => '024 555 1234', 'role' => 'warehouse', 'password' => 'temporary-pass',
+    ])->assertSessionHasErrors('email');
+
+    $this->post(route('users.store'), [
+        'name' => 'Email Only', 'email' => 'desk@bluefoods.test', 'role' => 'warehouse', 'password' => 'temporary-pass',
+    ])->assertSessionHasNoErrors();
+
+    expect(User::where('email', 'desk@bluefoods.test')->sole()->phone)->toBeNull();
 });
 
 test('U1: management disables a user and resets passwords', function () {

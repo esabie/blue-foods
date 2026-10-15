@@ -1,8 +1,9 @@
+import ConfirmModal from '@/Components/ConfirmModal';
 import Field from '@/Components/Field';
 import FormModal from '@/Components/FormModal';
 import PageShell from '@/Components/PageShell';
 import PrimaryButton from '@/Components/PrimaryButton';
-import RecordCard, { CardAction, CardGrid, Pill } from '@/Components/RecordCard';
+import RecordCard, { CardAction, CardGrid, DetailLine, ListToolbar, matches, MiniStats, NoMatches, Pill } from '@/Components/RecordCard';
 import TextInput from '@/Components/TextInput';
 import { formatDate, formatDateTime, formatGhs, todayInGhana, toCedisInput, toPesewas } from '@/lib/format';
 import { router, useForm } from '@inertiajs/react';
@@ -69,73 +70,145 @@ function History({ product }) {
     );
 }
 
+const number = (n) => n.toLocaleString('en-GH');
+
+const FILTERS = {
+    active: (p) => p.status === 'active',
+    low: (p) => p.status === 'active' && p.stock.low_stock,
+    nocost: (p) => p.status === 'active' && p.cost_pesewas === null,
+    retired: (p) => p.status === 'retired',
+    all: () => true,
+};
+
 export default function ProductsIndex({ products }) {
     const [editing, setEditing] = useState(null);
     const [pricing, setPricing] = useState(null);
     const [costing, setCosting] = useState(null);
     const [creating, setCreating] = useState(false);
     const [expanded, setExpanded] = useState(null);
+    const [retiring, setRetiring] = useState(null);
+    const [search, setSearch] = useState('');
+    const [tab, setTab] = useState('active');
 
-    const toggleStatus = (product) => {
-        const retiring = product.status === 'active';
-        if (retiring && !confirm(`Retire ${product.name}? It will be hidden from stock forms but kept in history.`)) {
-            return;
-        }
-        router.post(route(retiring ? 'products.retire' : 'products.reactivate', product.id), {}, { preserveScroll: true });
-    };
+    const count = (key) => products.filter(FILTERS[key]).length;
+    const tabs = [
+        { key: 'active', label: 'Active', count: count('active') },
+        ...(count('low') > 0 ? [{ key: 'low', label: 'Low stock', count: count('low') }] : []),
+        ...(count('nocost') > 0 ? [{ key: 'nocost', label: 'No cost set', count: count('nocost') }] : []),
+        ...(count('retired') > 0 ? [{ key: 'retired', label: 'Retired', count: count('retired') }] : []),
+        { key: 'all', label: 'All', count: products.length },
+    ];
+    const shown = products.filter((p) => FILTERS[tab](p) && matches(search, p.name, p.sku, p.category));
+
+    const reactivate = (product) => router.post(route('products.reactivate', product.id), {}, { preserveScroll: true });
 
     return (
-        <PageShell title="Products" actions={<PrimaryButton onClick={() => setCreating(true)}>New product</PrimaryButton>}>
-            {products.length === 0 && <p className="text-sm text-gray-500">No products yet.</p>}
-            <CardGrid>
-                {products.map((p) => {
-                    const pct = margin(p.price_pesewas, p.cost_pesewas);
+        <PageShell
+            title="Products"
+            actions={
+                <PrimaryButton onClick={() => setCreating(true)} className="gap-2">
+                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg>
+                    New product
+                </PrimaryButton>
+            }
+        >
+            {products.length > 0 && (
+                <ListToolbar search={search} onSearch={setSearch} placeholder="Search name, SKU or category" tabs={tabs} tab={tab} onTab={setTab} />
+            )}
 
-                    return (
-                        <RecordCard
-                            key={p.id}
-                            muted={p.status === 'retired'}
-                            media={<PhotoButton product={p} />}
-                            pills={
-                                <>
-                                    <Pill tone={p.status === 'active' ? 'green' : 'gray'}>{p.status}</Pill>
-                                    {p.cost_pesewas === null && <Pill tone="soft">No cost set</Pill>}
-                                </>
-                            }
-                            date={p.created_at && `Added ${formatDate(p.created_at)}`}
-                            title={p.name}
-                            subtitle={<span className="font-mono">SKU: {p.sku}</span>}
-                            actions={
-                                <>
-                                    <CardAction onClick={() => setPricing(p)}>Change price</CardAction>
-                                    <CardAction onClick={() => setCosting(p)}>{p.cost_pesewas === null ? 'Set cost' : 'Change cost'}</CardAction>
-                                    <CardAction onClick={() => setEditing(p)}>Edit</CardAction>
-                                    <CardAction onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
-                                        {expanded === p.id ? 'Hide history' : 'History'}
-                                    </CardAction>
-                                    <CardAction tone="muted" onClick={() => toggleStatus(p)}>{p.status === 'active' ? 'Retire' : 'Reactivate'}</CardAction>
-                                </>
-                            }
-                            footer={expanded === p.id && <History product={p} />}
-                        >
-                            <p>{p.category} · per {p.unit}</p>
-                            <p className="tabular-nums">
-                                <span className="font-semibold text-gray-900">{formatGhs(p.price_pesewas)}</span>
-                                <span className="text-gray-400">
-                                    {' · cost '}{p.cost_pesewas === null ? 'not set' : formatGhs(p.cost_pesewas)}
-                                    {pct !== null && ` · ${pct}% margin`}
-                                </span>
-                            </p>
-                            <p className="text-gray-500">Reorder below {p.reorder_level}</p>
-                        </RecordCard>
-                    );
-                })}
-            </CardGrid>
+            {products.length === 0 ? (
+                <NoMatches>No products yet. Use New product to add the first one.</NoMatches>
+            ) : shown.length === 0 ? (
+                <NoMatches onClear={search ? () => setSearch('') : null}>No products match.</NoMatches>
+            ) : (
+                <CardGrid>
+                    {shown.map((p) => {
+                        const pct = margin(p.price_pesewas, p.cost_pesewas);
+
+                        return (
+                            <RecordCard
+                                key={p.id}
+                                muted={p.status === 'retired'}
+                                media={<PhotoButton product={p} />}
+                                pills={
+                                    <>
+                                        <Pill tone={p.status === 'active' ? 'green' : 'gray'}>{p.status}</Pill>
+                                        {p.status === 'active' && p.stock.low_stock && <Pill tone="amber">Low stock</Pill>}
+                                        {p.status === 'active' && p.cost_pesewas === null && <Pill tone="soft">No cost set</Pill>}
+                                    </>
+                                }
+                                date={p.created_at && `Added ${formatDate(p.created_at)}`}
+                                title={p.name}
+                                subtitle={<><span className="font-mono">{p.sku}</span> · {p.category} · per {p.unit}</>}
+                                actions={
+                                    <>
+                                        <CardAction onClick={() => setPricing(p)}>Change price</CardAction>
+                                        <CardAction onClick={() => setCosting(p)}>{p.cost_pesewas === null ? 'Set cost' : 'Change cost'}</CardAction>
+                                        <CardAction onClick={() => setEditing(p)}>Edit</CardAction>
+                                        {p.status === 'active' ? (
+                                            <CardAction tone="muted" onClick={() => setRetiring(p)}>Retire</CardAction>
+                                        ) : (
+                                            <CardAction onClick={() => reactivate(p)}>Reactivate</CardAction>
+                                        )}
+                                    </>
+                                }
+                                footer={expanded === p.id && <History product={p} />}
+                            >
+                                <MiniStats
+                                    items={[
+                                        { label: 'Price', value: formatGhs(p.price_pesewas) },
+                                        { label: 'Cost', value: p.cost_pesewas === null ? 'Not set' : formatGhs(p.cost_pesewas), tone: p.cost_pesewas === null ? 'amber' : null },
+                                        { label: 'Margin', value: pct === null ? '—' : `${pct}%`, tone: pct === null ? 'muted' : null },
+                                    ]}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setExpanded(expanded === p.id ? null : p.id)}
+                                    aria-expanded={expanded === p.id}
+                                    className="block text-xs font-medium text-sky-800 hover:underline"
+                                >
+                                    {expanded === p.id ? 'Hide price and cost history' : 'Price and cost history'}
+                                </button>
+                                <div className="space-y-2">
+                                    <DetailLine icon="cube">
+                                        <span className={p.stock.low_stock ? 'font-medium text-amber-800' : ''}>{number(p.stock.unassigned)} in warehouse</span>
+                                        <span className="text-gray-400"> · reorder below {number(p.reorder_level)}</span>
+                                    </DetailLine>
+                                    <DetailLine icon="team">
+                                        {number(p.stock.with_team)} with the team · {number(p.stock.online)} in the online shop
+                                    </DetailLine>
+                                    <DetailLine icon="bag">
+                                        {p.stock.sold_30_days > 0 ? `${number(p.stock.sold_30_days)} sold in the last 30 days` : <span className="text-gray-400">No sales in the last 30 days</span>}
+                                    </DetailLine>
+                                </div>
+                            </RecordCard>
+                        );
+                    })}
+                </CardGrid>
+            )}
 
             <ProductModal show={creating} onClose={() => setCreating(false)} />
             {editing && <ProductModal show product={editing} onClose={() => setEditing(null)} />}
             {pricing && <PriceModal product={pricing} onClose={() => setPricing(null)} />}
             {costing && <CostModal product={costing} onClose={() => setCosting(null)} />}
+            {retiring && (
+                <ConfirmModal
+                    show
+                    danger
+                    title={`Retire ${retiring.name}?`}
+                    confirmLabel="Retire product"
+                    onClose={() => setRetiring(null)}
+                    onConfirm={(done) => router.post(route('products.retire', retiring.id), {}, { preserveScroll: true, onFinish: done })}
+                >
+                    It will no longer appear in stock forms or the online shop. Its history is kept, and you can reactivate it at any time.
+                    {retiring.stock.remaining > 0 && (
+                        <p className="mt-2 font-medium text-amber-800">
+                            {number(retiring.stock.remaining)} units are still in stock ({number(retiring.stock.unassigned)} in the warehouse,{' '}
+                            {number(retiring.stock.with_team)} with the team, {number(retiring.stock.online)} online).
+                        </p>
+                    )}
+                </ConfirmModal>
+            )}
         </PageShell>
     );
 }

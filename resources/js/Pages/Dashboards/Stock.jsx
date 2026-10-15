@@ -1,4 +1,4 @@
-import DashboardShell, { AXIS, ChartCard, COLORS, CURSOR, Empty, GRID, LEGEND, MoneyTooltip, number, OnlineShare, share } from '@/Components/Dashboard';
+import DashboardShell, { AXIS, ChartCard, COLORS, CURSOR, Empty, GRID, LEGEND, MoneyTooltip, number, share } from '@/Components/Dashboard';
 import { Badge, Stat, StatusDot, Table, Td, Th } from '@/Components/PageShell';
 import { formatDateTime, formatGhs } from '@/lib/format';
 import { Link } from '@inertiajs/react';
@@ -9,11 +9,13 @@ export default function Stock({ headline, stock, movements, filters, products, g
 
     return (
         <DashboardShell title="Stock" filters={filters} products={products} generatedAt={generatedAt}>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
-                <Stat label="Units produced" value={number(headline.produced)} icon="plus" accent="sky" hint={`${number(headline.sold)} sold`} />
-                <Stat label="Stock remaining" value={number(headline.remaining)} icon="cube" accent="violet" hint={<OnlineShare online={headline.online} total={headline.remaining} />} />
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <Stat label="Stock remaining" value={number(headline.remaining)} icon="cube" accent="violet" hint="Warehouse + team + online shop" />
                 <Stat label="Not yet assigned" value={number(headline.unassigned)} icon="archive" accent="amber" hint={`In the warehouse · ${share(headline.unassigned, headline.remaining)}`} />
-                <Stat label="With marketing team" value={number(headline.with_team)} icon="team" accent="indigo" hint={`${share(headline.with_team, headline.remaining)} of stock on hand`} />
+                <Stat label="With marketing team" value={number(headline.with_team)} icon="team" accent="indigo" hint={`${share(headline.with_team, headline.remaining)} of stock remaining`} />
+                <Stat label="In online shop" value={number(headline.online)} icon="shop" accent="teal" hint={`${share(headline.online, headline.remaining)} of stock remaining`} />
+                <Stat label="Units produced" value={number(headline.produced)} icon="plus" accent="sky" hint="In this period" />
+                <Stat label="Units sold" value={number(headline.sold)} icon="bag" accent="emerald" hint="Team and online, in this period" />
                 <Stat label="Value remaining" value={formatGhs(headline.value_remaining_pesewas)} icon="banknotes" accent="emerald" hint="At current prices" />
                 <Stat
                     label="Below reorder level"

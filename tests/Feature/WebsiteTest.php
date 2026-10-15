@@ -127,6 +127,6 @@ test('the online shop system account cannot be edited or re-enabled', function (
     $this->actingAs($this->manager)->post(route('users.reset-password', $system), ['password' => 'new-password-1'])->assertNotFound();
     $this->get(route('users.index'))->assertDontSee(User::SYSTEM_EMAIL);
 
-    $this->post(route('login'), ['login' => User::SYSTEM_EMAIL, 'password' => 'anything']);
+    $this->post(route('login'), ['email' => User::SYSTEM_EMAIL, 'password' => 'anything']);
     $this->assertAuthenticatedAs($this->manager);
 });

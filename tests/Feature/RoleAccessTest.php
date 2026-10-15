@@ -131,7 +131,7 @@ test('guests are sent to sign in for every staff endpoint', function () {
 function publicRoutes(): array
 {
     return [
-        'login', 'logout', 'storage.local', 'storage.local.upload', 'sanctum.csrf-cookie',
+        'login', 'logout', 'password.request', 'password.email', 'password.reset', 'password.store', 'storage.local', 'storage.local.upload', 'sanctum.csrf-cookie',
         'site.home', 'site.about', 'site.contact', 'site.sitemap',
         'shop.index', 'shop.show', 'cart.show', 'cart.add', 'cart.update', 'checkout.show', 'checkout.store',
         'shop.orders.show', 'shop.orders.pay', 'shop.payments.return', 'shop.payments.webhook',

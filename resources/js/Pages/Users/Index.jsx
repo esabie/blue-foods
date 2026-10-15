@@ -1,27 +1,39 @@
+import ConfirmModal from '@/Components/ConfirmModal';
 import Field from '@/Components/Field';
 import FormModal from '@/Components/FormModal';
 import PageShell from '@/Components/PageShell';
 import PrimaryButton from '@/Components/PrimaryButton';
-import RecordCard, { CardAction, CardGrid, Initials, NotProvided, Pill } from '@/Components/RecordCard';
+import RecordCard, { CardAction, CardGrid, DetailLine, Initials, ListToolbar, matches, MiniStats, NoMatches, NotProvided, Pill } from '@/Components/RecordCard';
 import SelectInput from '@/Components/SelectInput';
 import TextInput from '@/Components/TextInput';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatGhs, timeAgo } from '@/lib/format';
 import { router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+
+const ROLE_TONES = { management: 'sky', warehouse: 'amber', marketing: 'emerald' };
 
 export default function UsersIndex({ users, roles }) {
     const me = usePage().props.auth.user;
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState(null);
     const [resetting, setResetting] = useState(null);
+    const [disabling, setDisabling] = useState(null);
+    const [search, setSearch] = useState('');
+    const [tab, setTab] = useState('all');
 
-    const toggle = (user) => {
-        const disabling = user.status === 'active';
-        if (disabling && !confirm(`Disable ${user.name}? They will not be able to sign in. Their history is kept.`)) {
-            return;
-        }
-        router.post(route(disabling ? 'users.disable' : 'users.enable', user.id), {}, { preserveScroll: true });
-    };
+    const disabledCount = users.filter((u) => u.status === 'disabled').length;
+    const tabs = [
+        { key: 'all', label: 'All', count: users.length },
+        ...roles.map((r) => ({ key: r.value, label: r.label, count: users.filter((u) => u.role === r.value && u.status === 'active').length })),
+        ...(disabledCount > 0 ? [{ key: 'disabled', label: 'Disabled', count: disabledCount }] : []),
+    ];
+    const shown = users.filter(
+        (u) =>
+            (tab === 'all' || (tab === 'disabled' ? u.status === 'disabled' : u.role === tab && u.status === 'active')) &&
+            matches(search, u.name, u.email, u.phone, u.phone?.replace('+233', '0')),
+    );
+
+    const enable = (user) => router.post(route('users.enable', user.id), {}, { preserveScroll: true });
 
     return (
         <PageShell
@@ -33,40 +45,85 @@ export default function UsersIndex({ users, roles }) {
                 </PrimaryButton>
             }
         >
-            <CardGrid>
-                {users.map((u) => (
-                    <RecordCard
-                        key={u.id}
-                        muted={u.status === 'disabled'}
-                        media={<Initials name={u.name} />}
-                        pills={
-                            <>
-                                <Pill tone={u.status === 'active' ? 'green' : 'gray'}>{u.status}</Pill>
-                                {u.locked && <Pill tone="red">Locked</Pill>}
-                            </>
-                        }
-                        date={u.created_at && `Added ${formatDate(u.created_at)}`}
-                        title={u.name}
-                        subtitle={u.id === me.id ? `${u.role_label} · You` : u.role_label}
-                        actions={
-                            <>
-                                <CardAction onClick={() => setEditing(u)}>Edit</CardAction>
-                                <CardAction onClick={() => setResetting(u)}>Reset password</CardAction>
-                                {u.id !== me.id && (
-                                    <CardAction tone="muted" onClick={() => toggle(u)}>{u.status === 'active' ? 'Disable' : 'Enable'}</CardAction>
-                                )}
-                            </>
-                        }
-                    >
-                        <p className="break-all">{u.email ?? <NotProvided />}</p>
-                        <p>{u.phone ?? <NotProvided />}</p>
-                    </RecordCard>
-                ))}
-            </CardGrid>
+            <ListToolbar search={search} onSearch={setSearch} placeholder="Search name, phone or email" tabs={tabs} tab={tab} onTab={setTab} />
+
+            {shown.length === 0 ? (
+                <NoMatches onClear={search ? () => setSearch('') : null}>No users match.</NoMatches>
+            ) : (
+                <CardGrid>
+                    {shown.map((u) => (
+                        <RecordCard
+                            key={u.id}
+                            muted={u.status === 'disabled'}
+                            media={<Initials name={u.name} tone={u.status === 'active' ? ROLE_TONES[u.role] : 'slate'} />}
+                            pills={
+                                <>
+                                    <Pill tone={u.status === 'active' ? 'green' : 'gray'}>{u.status}</Pill>
+                                    {u.locked && <Pill tone="red">Locked</Pill>}
+                                </>
+                            }
+                            date={u.created_at && `Added ${formatDate(u.created_at)}`}
+                            title={u.name}
+                            subtitle={u.id === me.id ? `${u.role_label} · You` : u.role_label}
+                            actions={
+                                <>
+                                    <CardAction onClick={() => setEditing(u)}>Edit</CardAction>
+                                    <CardAction onClick={() => setResetting(u)}>{u.locked ? 'Unlock and reset password' : 'Reset password'}</CardAction>
+                                    {u.id !== me.id &&
+                                        (u.status === 'active' ? (
+                                            <CardAction tone="muted" onClick={() => setDisabling(u)}>Disable</CardAction>
+                                        ) : (
+                                            <CardAction onClick={() => enable(u)}>Enable</CardAction>
+                                        ))}
+                                </>
+                            }
+                        >
+                            <div className="space-y-2">
+                                {u.email ? <DetailLine icon="envelope" href={`mailto:${u.email}`}>{u.email}</DetailLine> : <DetailLine icon="envelope"><NotProvided /></DetailLine>}
+                                {u.phone ? <DetailLine icon="phone" href={`tel:${u.phone}`}>{u.phone}</DetailLine> : <DetailLine icon="phone"><NotProvided /></DetailLine>}
+                                <DetailLine icon="clock">
+                                    {u.last_login_at ? `Signed in ${timeAgo(u.last_login_at)}` : <span className="text-gray-400">Not signed in yet</span>}
+                                    {u.team && <span className="text-gray-400"> · {u.team.last_sale_at ? `last sale ${timeAgo(u.team.last_sale_at)}` : 'no sales yet'}</span>}
+                                </DetailLine>
+                            </div>
+                            {u.team && (
+                                <MiniStats
+                                    items={[
+                                        { label: 'Stock held', value: `${u.team.units_held.toLocaleString('en-GH')} units`, tone: u.team.units_held === 0 ? 'muted' : null },
+                                        {
+                                            label: u.team.cash_overdue ? 'Cash overdue' : 'Cash to hand in',
+                                            value: formatGhs(u.team.cash_owed_pesewas),
+                                            tone: u.team.cash_overdue ? 'red' : u.team.cash_owed_pesewas === 0 ? 'muted' : null,
+                                        },
+                                    ]}
+                                />
+                            )}
+                        </RecordCard>
+                    ))}
+                </CardGrid>
+            )}
 
             <UserModal show={creating} roles={roles} onClose={() => setCreating(false)} />
             {editing && <UserModal show user={editing} roles={roles} onClose={() => setEditing(null)} />}
             {resetting && <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} />}
+            {disabling && (
+                <ConfirmModal
+                    show
+                    danger
+                    title={`Disable ${disabling.name}?`}
+                    confirmLabel="Disable account"
+                    onClose={() => setDisabling(null)}
+                    onConfirm={(done) => router.post(route('users.disable', disabling.id), {}, { preserveScroll: true, onFinish: done })}
+                >
+                    They will be signed out and will not be able to sign in. Everything they recorded is kept, and you can enable the account again at any time.
+                    {disabling.team?.units_held > 0 && (
+                        <p className="mt-2 font-medium text-amber-800">They still hold {disabling.team.units_held.toLocaleString('en-GH')} units of stock.</p>
+                    )}
+                    {disabling.team?.cash_owed_pesewas > 0 && (
+                        <p className="mt-1 font-medium text-amber-800">They still have {formatGhs(disabling.team.cash_owed_pesewas)} to hand in.</p>
+                    )}
+                </ConfirmModal>
+            )}
         </PageShell>
     );
 }
@@ -91,11 +148,11 @@ function UserModal({ show, user, roles, onClose }) {
                 <TextInput id="name" className="block w-full" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
             </Field>
             <div className="grid grid-cols-2 gap-4">
-                <Field label="Phone" htmlFor="phone" error={form.errors.phone} hint="e.g. 024 123 4567">
-                    <TextInput id="phone" type="tel" className="block w-full" value={form.data.phone} onChange={(e) => form.setData('phone', e.target.value)} />
-                </Field>
-                <Field label="Email" htmlFor="email" error={form.errors.email} hint="Phone or email is required">
+                <Field label="Email" htmlFor="email" error={form.errors.email} hint="Used to sign in and reset the password">
                     <TextInput id="email" type="email" className="block w-full" value={form.data.email} onChange={(e) => form.setData('email', e.target.value)} />
+                </Field>
+                <Field label="Phone (optional)" htmlFor="phone" error={form.errors.phone} hint="e.g. 024 123 4567">
+                    <TextInput id="phone" type="tel" className="block w-full" value={form.data.phone} onChange={(e) => form.setData('phone', e.target.value)} />
                 </Field>
             </div>
             {!user && (

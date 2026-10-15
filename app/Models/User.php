@@ -56,6 +56,7 @@ class User extends Authenticatable
             'role' => Role::class,
             'status' => UserStatus::class,
             'locked_until' => 'datetime',
+            'last_login_at' => 'datetime',
         ];
     }
 

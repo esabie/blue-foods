@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Auth;
 
 use App\Models\User;
-use App\Support\Phone;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -27,25 +26,25 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'login' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string'],
         ];
     }
 
     /**
-     * U2: sign in with phone or email; five failed attempts lock the account for 15 minutes.
+     * U2: sign in with email and password; five failed attempts lock the account for 15 minutes.
      *
      * @throws ValidationException
      */
     public function authenticate(): void
     {
-        $user = $this->findUser();
+        $user = User::where('email', mb_strtolower(trim($this->string('email'))))->first();
 
         if ($user?->isLocked()) {
             $minutes = (int) ceil(now()->diffInSeconds($user->locked_until) / 60);
 
             throw ValidationException::withMessages([
-                'login' => "Too many failed attempts. This account is locked for {$minutes} more minute(s).",
+                'email' => "Too many failed attempts. This account is locked for {$minutes} more minute(s).",
             ]);
         }
 
@@ -54,33 +53,16 @@ class LoginRequest extends FormRequest
                 $this->recordFailedAttempt($user);
             }
 
-            throw ValidationException::withMessages(['login' => trans('auth.failed')]);
+            throw ValidationException::withMessages(['email' => trans('auth.failed')]);
         }
 
         if (! $user->isActive()) {
-            throw ValidationException::withMessages(['login' => 'This account has been disabled.']);
+            throw ValidationException::withMessages(['email' => 'This account has been disabled.']);
         }
 
-        if ($user->failed_login_attempts > 0 || $user->locked_until !== null) {
-            $user->forceFill(['failed_login_attempts' => 0, 'locked_until' => null])->saveQuietly();
-        }
+        $user->forceFill(['failed_login_attempts' => 0, 'locked_until' => null, 'last_login_at' => now()])->saveQuietly();
 
         Auth::login($user, $this->boolean('remember'));
-    }
-
-    private function findUser(): ?User
-    {
-        $login = trim($this->string('login'));
-
-        if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
-            return User::where('email', mb_strtolower($login))->first();
-        }
-
-        if (Phone::looksLikePhone($login)) {
-            return User::where('phone', Phone::normalize($login))->first();
-        }
-
-        return null;
     }
 
     private function recordFailedAttempt(User $user): void

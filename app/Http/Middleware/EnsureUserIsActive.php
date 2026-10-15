@@ -21,7 +21,7 @@ class EnsureUserIsActive
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            return redirect()->route('login')->withErrors(['login' => 'This account has been disabled.']);
+            return redirect()->route('login')->withErrors(['email' => 'This account has been disabled.']);
         }
 
         return $next($request);
