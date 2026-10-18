@@ -36,6 +36,7 @@ Route::get('/shop/{product:sku}', [ShopController::class, 'show'])->name('shop.s
 Route::get('/cart', [CheckoutController::class, 'cart'])->name('cart.show');
 Route::post('/cart', [ShopController::class, 'addToCart'])->name('cart.add');
 Route::patch('/cart/{product}', [CheckoutController::class, 'updateCart'])->name('cart.update');
+Route::post('/cart/clear', [CheckoutController::class, 'clearCart'])->name('cart.clear');
 
 Route::get('/checkout', [CheckoutController::class, 'show'])->name('checkout.show');
 Route::post('/checkout', [CheckoutController::class, 'store'])->middleware('throttle:10,1')->name('checkout.store');

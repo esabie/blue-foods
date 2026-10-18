@@ -13,13 +13,13 @@
     @hasSection('og_image')<meta property="og:image" content="@yield('og_image')">@endif
     @hasSection('robots')<meta name="robots" content="@yield('robots')">@endif
     <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet">
-    @vite('resources/css/site.css')
+    <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700|fraunces:500,600,700&display=swap" rel="stylesheet">
+    @vite(['resources/css/site.css', 'resources/js/site.js'])
 </head>
-<body class="flex min-h-screen flex-col bg-white font-sans text-gray-800 antialiased">
-    <header class="border-b border-gray-100 bg-white">
-        <div class="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-4 sm:gap-4 sm:px-6">
-            <a href="{{ route('site.home') }}" class="flex shrink-0 items-center gap-1.5 text-base font-bold text-sky-800 sm:gap-2 sm:text-lg">
+<body class="flex min-h-screen flex-col bg-white font-sans text-gray-800 antialiased" @if (session('open_cart')) data-open-cart="1" @endif>
+    <header class="sticky top-0 z-30 border-b border-sky-950/10 bg-white/90 backdrop-blur-md">
+        <div class="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3.5 sm:gap-4 sm:px-6">
+            <a href="{{ route('site.home') }}" class="flex shrink-0 items-center gap-1.5 font-display text-lg font-semibold tracking-tight text-sky-900 sm:gap-2 sm:text-xl">
                 <svg class="h-7 w-7 sm:h-8 sm:w-8" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M3 16c4-6 10-8 15-6l6-5v8l5 3-5 3v8l-6-5c-5 2-11 0-15-6z" fill="currentColor"/><circle cx="11" cy="15" r="1.5" fill="#fff"/></svg>
                 <span class="max-[399px]:sr-only">Blue Foods</span>
             </a>
@@ -32,13 +32,13 @@
                         'text-gray-600 hover:text-sky-800' => ! (request()->routeIs($name) || ($name === 'shop.index' && request()->routeIs('shop.show'))),
                     ])>{{ $label }}</a>
                 @endforeach
-                <a href="{{ route('cart.show') }}" class="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1.5 text-sky-800 hover:bg-sky-100 sm:px-3">
+                <button type="button" data-cart-open class="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-sky-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-sky-800 sm:px-3.5" aria-haspopup="dialog" aria-controls="cart-drawer">
                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
                     <span class="sr-only sm:not-sr-only">Cart</span>
                     @if ($cartCount > 0)
-                        <span class="rounded-full bg-sky-700 px-1.5 text-xs text-white">{{ $cartCount }}</span>
+                        <span data-cart-count class="rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-sky-950">{{ $cartCount }}</span>
                     @endif
-                </a>
+                </button>
             </nav>
         </div>
     </header>
@@ -83,5 +83,7 @@
             <a href="{{ route('login') }}" class="ml-2 hover:text-gray-600">Staff sign in</a>
         </div>
     </footer>
+
+    @include('site.partials.cart-drawer')
 </body>
 </html>

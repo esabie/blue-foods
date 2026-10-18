@@ -29,10 +29,11 @@ function onlineBalance(): int
 }
 
 test('W2: the shop shows availability from the online shop balance only', function () {
-    $this->get(route('shop.index'))->assertOk()->assertSee('Only 10 left')->assertSee('GHS 25.00');
+    $this->get(route('shop.index'))->assertOk()->assertSee('GHS 25.00')->assertSee('Add to cart');
+    $this->get(route('shop.show', $this->w->product->sku))->assertOk()->assertSee('Only 10 left');
 
     ledger()->allocateOnline($this->w->product, 100, $this->w->manager);
-    $this->get(route('shop.index'))->assertSee('In stock');
+    $this->get(route('shop.show', $this->w->product->sku))->assertSee('In stock');
 
     // Warehouse and team stock are never offered online.
     expect(shop()->availability([$this->w->product->id])[$this->w->product->id])->toBe(110);
@@ -55,9 +56,42 @@ test('W2: retired and unpriced products are not sold', function () {
     $this->get(route('shop.index'))->assertOk()->assertDontSee($retired->name)->assertDontSee($unpriced->name);
 });
 
+test('the cart opens as a side drawer from the header, and clear empties it', function () {
+    $this->get(route('shop.index'))
+        ->assertOk()
+        ->assertSee('data-cart-open', false)
+        ->assertSee('id="cart-drawer"', false)
+        ->assertSee('Your cart is empty.');
+
+    $this->from(route('shop.index'))
+        ->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 2])
+        ->assertSessionHas('open_cart');
+
+    $this->get(route('shop.index'))
+        ->assertSee($this->w->product->name)
+        ->assertSee('Proceed to checkout')
+        ->assertSee('Clear cart');
+
+    $this->from(route('shop.index'))->post(route('cart.clear'))->assertRedirect(route('shop.index'));
+    expect(app(Cart::class)->count())->toBe(0);
+});
+
+test('adding to the cart via ajax returns the drawer html without a redirect', function () {
+    $this->postJson(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 2])
+        ->assertOk()
+        ->assertJsonPath('count', 2)
+        ->assertJsonStructure(['count', 'html', 'status'])
+        ->assertSee($this->w->product->name, false);
+
+    expect(app(Cart::class)->count())->toBe(2);
+});
+
 test('W3: cannot add more than the online shop balance, including what is already in the cart', function () {
     $this->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 11])->assertSessionHasErrors('quantity');
-    $this->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 8])->assertRedirect(route('cart.show'));
+    $this->from(route('shop.index'))
+        ->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 8])
+        ->assertRedirect(route('shop.index'))
+        ->assertSessionHas('open_cart');
     $this->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 3])->assertSessionHasErrors('quantity');
 
     expect(app(Cart::class)->raw())->toBe([$this->w->product->id => 8]);

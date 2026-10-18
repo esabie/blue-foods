@@ -2,9 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+    :root {
+        --bf-deep: #0c4a6e;
+        --bf-foam: #e0f2fe;
+        --bf-sand: #f8fafc;
+    }
+}
+
 @layer components {
     .btn {
-        @apply inline-flex items-center justify-center rounded-md bg-sky-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+        @apply inline-flex items-center justify-center rounded-md bg-sky-800 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
     }
 
     .btn-secondary {
@@ -17,5 +25,108 @@
 
     .prose-site p + p {
         @apply mt-4;
+    }
+
+    .font-display {
+        font-family: 'Fraunces', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+    }
+
+    .shop-band {
+        background:
+            radial-gradient(ellipse 80% 60% at 10% 20%, rgba(14, 165, 233, 0.18), transparent 55%),
+            radial-gradient(ellipse 70% 50% at 90% 80%, rgba(12, 74, 110, 0.12), transparent 50%),
+            linear-gradient(160deg, #0c4a6e 0%, #075985 45%, #0e7490 100%);
+    }
+
+    .product-card {
+        @apply flex flex-col overflow-hidden rounded-2xl border border-sky-950/10 bg-white transition duration-300;
+        box-shadow:
+            0 1px 2px rgba(12, 74, 110, 0.06),
+            0 8px 24px -12px rgba(12, 74, 110, 0.18);
+    }
+
+    .product-card:hover {
+        @apply -translate-y-0.5 border-sky-800/20;
+        box-shadow:
+            0 2px 4px rgba(12, 74, 110, 0.06),
+            0 18px 36px -14px rgba(12, 74, 110, 0.32);
+    }
+
+    .product-card__media {
+        @apply relative block aspect-[4/3] overflow-hidden border-b border-sky-950/5 bg-[#f4f8fb];
+    }
+
+    .product-card__media img {
+        @apply h-full w-full object-cover transition duration-500 ease-out;
+        /* Product photos ship with large empty margins; zoom so the pack fills the card. */
+        transform: scale(1.22);
+        transform-origin: center;
+    }
+
+    .product-card:hover .product-card__media img {
+        transform: scale(1.28);
+    }
+
+    .fade-up {
+        animation: bf-fade-up 0.55s ease-out both;
+    }
+
+    .fade-up-delay-1 { animation-delay: 0.06s; }
+    .fade-up-delay-2 { animation-delay: 0.12s; }
+    .fade-up-delay-3 { animation-delay: 0.18s; }
+}
+
+@keyframes bf-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Right-side cart drawer */
+.cart-drawer {
+    @apply pointer-events-none fixed inset-0 z-50;
+}
+
+.cart-drawer[data-open='true'] {
+    @apply pointer-events-auto;
+}
+
+.cart-drawer__backdrop {
+    @apply absolute inset-0 bg-sky-950/40 opacity-0 transition-opacity duration-500;
+}
+
+.cart-drawer[data-open='true'] .cart-drawer__backdrop {
+    @apply opacity-100;
+}
+
+.cart-drawer__panel {
+    @apply absolute inset-y-0 right-0 flex w-full max-w-md translate-x-full flex-col bg-white shadow-2xl shadow-sky-950/20 transition-transform duration-500 ease-out;
+}
+
+.cart-drawer[data-open='true'] .cart-drawer__panel {
+    @apply translate-x-0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fade-up,
+    .product-card,
+    .product-card__media img,
+    .cart-drawer__backdrop,
+    .cart-drawer__panel {
+        animation: none !important;
+        transition: none !important;
+    }
+
+    .product-card:hover {
+        transform: none;
+    }
+
+    .product-card:hover .product-card__media img {
+        transform: scale(1.22);
     }
 }

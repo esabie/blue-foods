@@ -14,6 +14,7 @@ export default {
         extend: {
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                display: ['Fraunces', 'ui-serif', 'Georgia', ...defaultTheme.fontFamily.serif],
             },
         },
     },

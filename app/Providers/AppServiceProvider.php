@@ -56,9 +56,12 @@ class AppServiceProvider extends ServiceProvider
         }
 
         View::composer('site.*', function ($view) {
+            $cart = app(Cart::class);
             $view->with([
                 'site' => SiteSetting::values(),
-                'cartCount' => app(Cart::class)->count(),
+                'cartCount' => $cart->count(),
+                'cartLines' => $cart->lines(),
+                'cartSubtotal' => $cart->subtotal(),
             ]);
         });
 

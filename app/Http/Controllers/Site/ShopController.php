@@ -3,15 +3,19 @@
 namespace App\Http\Controllers\Site;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Site\Concerns\RespondsWithCartDrawer;
 use App\Models\Product;
 use App\Services\Shop\Cart;
 use App\Services\Shop\OnlineShop;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ShopController extends Controller
 {
+    use RespondsWithCartDrawer;
+
     public function __construct(private readonly OnlineShop $shop) {}
 
     /**
@@ -48,7 +52,7 @@ class ShopController extends Controller
     /**
      * W3: cannot add more than the online shop balance.
      */
-    public function addToCart(Request $request, Cart $cart): RedirectResponse
+    public function addToCart(Request $request, Cart $cart): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'product_id' => ['required', 'integer', 'exists:products,id'],
@@ -60,13 +64,24 @@ class ShopController extends Controller
         $inCart = $cart->raw()[$product->id] ?? 0;
 
         if ($inCart + $data['quantity'] > $available) {
-            return back()->withErrors(['quantity' => $available === 0
+            $message = $available === 0
                 ? "{$product->name} is out of stock."
-                : "Only {$available} {$product->unit} of {$product->name} available".($inCart ? " ({$inCart} already in your cart)." : '.')]);
+                : "Only {$available} {$product->unit} of {$product->name} available".($inCart ? " ({$inCart} already in your cart)." : '.');
+
+            if ($this->wantsCartJson($request)) {
+                return response()->json(['message' => $message, 'errors' => ['quantity' => [$message]]], 422);
+            }
+
+            return back()->withErrors(['quantity' => $message]);
         }
 
         $cart->add($product->id, $data['quantity']);
+        $status = "Added {$data['quantity']} × {$product->name} to your cart.";
 
-        return redirect()->route('cart.show')->with('status', "Added {$data['quantity']} × {$product->name} to your cart.");
+        if ($this->wantsCartJson($request)) {
+            return $this->cartDrawerJson($cart, $status);
+        }
+
+        return back()->with('open_cart', true)->with('status', $status);
     }
 }

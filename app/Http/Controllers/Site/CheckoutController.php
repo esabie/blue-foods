@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Site;
 use App\Enums\DeliveryMethod;
 use App\Enums\PaymentMethod;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Site\Concerns\RespondsWithCartDrawer;
 use App\Models\Product;
 use App\Models\SiteSetting;
 use App\Services\Payments\PaymentGateway;
 use App\Services\Shop\Cart;
 use App\Services\Shop\OnlineShop;
 use App\Support\Phone;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -18,6 +20,8 @@ use Illuminate\View\View;
 
 class CheckoutController extends Controller
 {
+    use RespondsWithCartDrawer;
+
     public function __construct(private readonly Cart $cart, private readonly OnlineShop $shop) {}
 
     public function cart(): View
@@ -25,18 +29,39 @@ class CheckoutController extends Controller
         return view('site.cart', ['lines' => $this->cart->lines(), 'subtotal' => $this->cart->subtotal()]);
     }
 
-    public function updateCart(Request $request, Product $product): RedirectResponse
+    public function updateCart(Request $request, Product $product): RedirectResponse|JsonResponse
     {
         $data = $request->validate(['quantity' => ['required', 'integer', 'min:0', 'max:1000']]);
         $available = $this->shop->availability([$product->id])[$product->id];
 
         if ($data['quantity'] > $available) {
-            return back()->withErrors(['quantity' => "Only {$available} {$product->unit} of {$product->name} available."]);
+            $message = "Only {$available} {$product->unit} of {$product->name} available.";
+
+            if ($this->wantsCartJson($request)) {
+                return response()->json(['message' => $message, 'errors' => ['quantity' => [$message]]], 422);
+            }
+
+            return back()->withErrors(['quantity' => $message]);
         }
 
         $this->cart->set($product->id, $data['quantity']);
 
-        return back();
+        if ($this->wantsCartJson($request)) {
+            return $this->cartDrawerJson($this->cart);
+        }
+
+        return back()->with('open_cart', true);
+    }
+
+    public function clearCart(Request $request): RedirectResponse|JsonResponse
+    {
+        $this->cart->clear();
+
+        if ($this->wantsCartJson($request)) {
+            return $this->cartDrawerJson($this->cart, 'Cart cleared.');
+        }
+
+        return back()->with('open_cart', true)->with('status', 'Cart cleared.');
     }
 
     public function show(): View|RedirectResponse

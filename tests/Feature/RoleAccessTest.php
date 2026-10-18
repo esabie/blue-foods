@@ -133,7 +133,7 @@ function publicRoutes(): array
     return [
         'login', 'logout', 'password.request', 'password.email', 'password.reset', 'password.store', 'storage.local', 'storage.local.upload', 'sanctum.csrf-cookie',
         'site.home', 'site.about', 'site.contact', 'site.sitemap',
-        'shop.index', 'shop.show', 'cart.show', 'cart.add', 'cart.update', 'checkout.show', 'checkout.store',
+        'shop.index', 'shop.show', 'cart.show', 'cart.add', 'cart.update', 'cart.clear', 'checkout.show', 'checkout.store',
         'shop.orders.show', 'shop.orders.pay', 'shop.payments.return', 'shop.payments.webhook',
         'shop.sandbox.show', 'shop.sandbox.complete',
     ];

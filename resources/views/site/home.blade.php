@@ -9,9 +9,13 @@
 @section('content')
     <section class="relative overflow-hidden bg-sky-900 text-white">
         @if ($site['home_image'])
-            <img src="{{ Storage::disk('public')->url($site['home_image']) }}" alt="" class="absolute inset-0 h-full w-full object-cover object-bottom opacity-40">
+            <img
+                src="{{ Storage::disk('public')->url($site['home_image']) }}?v={{ @filemtime(Storage::disk('public')->path($site['home_image'])) ?: time() }}"
+                alt=""
+                class="absolute inset-0 h-full w-full object-cover object-[center_70%] opacity-40"
+            >
         @endif
-        <div class="relative mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
+        <div class="relative mx-auto max-w-6xl px-4 py-24 sm:px-6 sm:py-32">
             <h1 class="max-w-2xl text-3xl font-bold leading-tight sm:text-5xl">{{ $site['home_title'] }}</h1>
             <p class="mt-4 max-w-xl text-lg text-sky-100">{{ $site['home_intro'] }}</p>
             <div class="mt-8 flex flex-wrap gap-3">

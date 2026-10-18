@@ -39,7 +39,9 @@ function chargeSuccess(Payment $payment, ?int $amount = null): array
 }
 
 test('a customer can buy online end to end with the sandbox provider', function () {
-    $this->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 2])->assertRedirect(route('cart.show'));
+    $this->from(route('shop.index'))
+        ->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 2])
+        ->assertRedirect(route('shop.index'));
     $this->get(route('checkout.show'))->assertOk()->assertSee('GHS 50.00');
 
     $response = $this->post(route('checkout.store'), [
