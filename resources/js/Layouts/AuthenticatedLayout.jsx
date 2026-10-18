@@ -38,12 +38,12 @@ function Sidebar({ user }) {
 
     return (
         <div className="flex h-full flex-col bg-sky-950">
-            <Link href={route('dashboard')} className="flex h-14 shrink-0 items-center gap-2 px-5 text-white">
+            <Link href={route('dashboard')} className="flex shrink-0 items-center gap-2 px-5 pb-2 pt-6 text-white">
                 <ApplicationLogo className="h-7 w-7 text-sky-300" />
                 <span className="font-semibold tracking-tight">Blue Foods</span>
             </Link>
 
-            <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-8">
+            <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-12">
                 {sections.map(([heading, links], i) => (
                     <div key={heading ?? i}>
                         {heading && <p className="mb-1 px-3 text-xs font-medium text-sky-200/50">{heading}</p>}

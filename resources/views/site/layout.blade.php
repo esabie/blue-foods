@@ -79,7 +79,7 @@
             </div>
         </div>
         <div class="border-t border-gray-100 py-4 text-center text-xs text-gray-400">
-            &copy; {{ now()->year }} Blue Foods. Your details are used only to process your order.
+            &copy; {{ now()->year }} Blue Foods.
             <a href="{{ route('login') }}" class="ml-2 hover:text-gray-600">Staff sign in</a>
         </div>
     </footer>
