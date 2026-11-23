@@ -16,4 +16,10 @@ return [
     */
     'cash_due_days' => (int) env('CASH_DUE_DAYS', 2),
 
+    /*
+    | Open production lots with remaining stock are flagged (Lots page, staff
+    | bell, overview) when expiry falls within this many days.
+    */
+    'lot_expiring_days' => (int) env('LOT_EXPIRING_DAYS', 14),
+
 ];

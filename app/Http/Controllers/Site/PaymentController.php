@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Services\Payments\InvalidWebhook;
 use App\Services\Payments\PaymentGateway;
 use App\Services\Shop\OnlineShop;
+use App\Services\Shop\OrderAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,14 +18,24 @@ use Illuminate\View\View;
 
 class PaymentController extends Controller
 {
-    public function __construct(private readonly OnlineShop $shop, private readonly PaymentGateway $gateway) {}
+    public function __construct(
+        private readonly OnlineShop $shop,
+        private readonly PaymentGateway $gateway,
+        private readonly OrderAccess $access,
+    ) {}
 
     /**
-     * Order status page; the token in the link stands in for an account.
+     * Order status page. Access lives in the session; a ?token= query is redeemed
+     * once then stripped from the URL so secrets are not left in the address bar.
      */
-    public function order(Request $request, OnlineOrder $order): View
+    public function order(Request $request, OnlineOrder $order): View|RedirectResponse
     {
-        abort_unless(hash_equals($order->access_token, (string) $request->query('token')), 404);
+        abort_unless($this->access->authorize($request, $order), 404);
+
+        if ($request->query->has('token')) {
+            return redirect()->to($order->statusUrl());
+        }
+
         $order->load(['items.product', 'statusChanges']);
 
         return view('site.order', ['order' => $order]);
@@ -32,7 +43,7 @@ class PaymentController extends Controller
 
     public function pay(Request $request, OnlineOrder $order): RedirectResponse
     {
-        abort_unless(hash_equals($order->access_token, (string) $request->input('token')), 404);
+        abort_unless($this->access->authorize($request, $order), 404);
 
         $payment = $this->shop->startPayment($order, $this->gateway->name());
 
@@ -50,6 +61,7 @@ class PaymentController extends Controller
         }
 
         $order = $payment->order->fresh();
+        $this->access->grant($order);
 
         return redirect()->to($order->statusUrl())->with('status', $order->isPaid()
             ? 'Payment received. Thank you!'

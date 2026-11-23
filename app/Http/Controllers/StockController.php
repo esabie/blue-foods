@@ -9,6 +9,7 @@ use App\Enums\UserStatus;
 use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Services\LotTracker;
 use App\Services\StockLedger;
 use App\Services\StockPosition;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +23,10 @@ use Inertia\Response;
 
 class StockController extends Controller
 {
-    public function __construct(private readonly StockLedger $ledger) {}
+    public function __construct(
+        private readonly StockLedger $ledger,
+        private readonly LotTracker $lots,
+    ) {}
 
     /**
      * S3: per product, unassigned, with the marketing team, in the online shop and sold.
@@ -31,6 +35,11 @@ class StockController extends Controller
     {
         $products = Product::with('currentPrice')->orderBy('name')->get();
         $rows = $position->byProduct($products)->keyBy('product_id');
+
+        $produceProductId = $request->integer('produce') ?: null;
+        if ($produceProductId && ! $products->contains('id', $produceProductId)) {
+            $produceProductId = null;
+        }
 
         return Inertia::render('Stock/Index', [
             'products' => $products->map(fn (Product $product) => [
@@ -54,6 +63,7 @@ class StockController extends Controller
                     ->get()
             ),
             'adjustmentReasons' => array_column(AdjustmentReason::cases(), 'value'),
+            'produce_product_id' => $produceProductId,
             'can' => [
                 'assign' => Gate::allows('assign-stock'),
                 'allocateOnline' => $request->user()->hasRole(Role::Management),
@@ -89,12 +99,45 @@ class StockController extends Controller
             'product_id' => ['required', 'integer', 'exists:products,id'],
             'quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
             'produced_on' => ['required', 'date', 'before_or_equal:today'],
+            'expires_on' => ['nullable', 'date', 'after_or_equal:produced_on'],
         ]);
 
         $product = Product::findOrFail($data['product_id']);
-        $this->ledger->produce($product, $data['quantity'], $request->user(), Carbon::parse($data['produced_on']));
+        $this->ledger->produce(
+            $product,
+            $data['quantity'],
+            $request->user(),
+            Carbon::parse($data['produced_on']),
+            isset($data['expires_on']) ? Carbon::parse($data['expires_on']) : null,
+        );
 
         return back()->with('success', "Recorded {$data['quantity']} {$product->unit} of {$product->name} produced.");
+    }
+
+    public function lots(Request $request): Response
+    {
+        $productId = $request->integer('product_id') ?: null;
+
+        $lots = $this->lots->remainingByProduct($productId);
+
+        return Inertia::render('Stock/Lots', [
+            'lots' => $lots->map(fn ($lot) => [
+                'id' => $lot->id,
+                'lot_code' => $lot->lot_code,
+                'product' => $lot->product->name,
+                'sku' => $lot->product->sku,
+                'unit' => $lot->product->unit,
+                'produced_on' => $lot->produced_on->toDateString(),
+                'expires_on' => $lot->expires_on?->toDateString(),
+                'quantity' => $lot->quantity,
+                'remaining' => $lot->remaining,
+                'expired' => $lot->isExpired(),
+                'expiring_soon' => $lot->isExpiringSoon(),
+            ]),
+            'products' => Product::orderBy('name')->get(['id', 'name']),
+            'filters' => ['product_id' => $productId],
+            'expiringDays' => (int) config('inventory.lot_expiring_days'),
+        ]);
     }
 
     public function adjust(Request $request): RedirectResponse

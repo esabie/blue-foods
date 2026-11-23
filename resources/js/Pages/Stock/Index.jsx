@@ -9,8 +9,8 @@ import { formatDateTime, formatGhs, todayInGhana } from '@/lib/format';
 import { Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function StockIndex({ products, members, recentMovements, adjustmentReasons, can }) {
-    const [action, setAction] = useState(null);
+export default function StockIndex({ products, members, recentMovements, adjustmentReasons, can, produce_product_id }) {
+    const [action, setAction] = useState(produce_product_id ? 'produce' : null);
     const close = () => setAction(null);
     const active = products.filter((p) => p.status === 'active');
 
@@ -113,7 +113,12 @@ export default function StockIndex({ products, members, recentMovements, adjustm
                 </div>
             </Card>
 
-            <ProduceModal show={action === 'produce'} onClose={close} products={active} />
+            <ProduceModal
+                show={action === 'produce'}
+                onClose={close}
+                products={active}
+                initialProductId={produce_product_id}
+            />
             <AdjustModal show={action === 'adjust'} onClose={close} products={products} reasons={adjustmentReasons} />
             {can.assign && <AssignModal show={action === 'assign'} onClose={close} products={active} members={members} />}
             {can.allocateOnline && <AllocateModal show={action === 'allocate'} onClose={close} products={active} />}
@@ -194,8 +199,18 @@ function useActionForm(initial, onClose) {
     return { ...form, submit };
 }
 
-function ProduceModal({ show, onClose, products }) {
-    const form = useActionForm({ product_id: '', quantity: '', produced_on: todayInGhana() }, onClose);
+function ProduceModal({ show, onClose, products, initialProductId }) {
+    const form = useActionForm({
+        product_id: initialProductId ? String(initialProductId) : '',
+        quantity: '',
+        produced_on: todayInGhana(),
+        expires_on: '',
+    }, onClose);
+    const product = products.find((p) => String(p.id) === String(form.data.product_id));
+    const producedKey = (form.data.produced_on || '').replaceAll('-', '');
+    const lotCodePreview = product && producedKey
+        ? `${producedKey}-${product.sku}-…`
+        : 'Select a product and date';
 
     return (
         <FormModal
@@ -217,6 +232,15 @@ function ProduceModal({ show, onClose, products }) {
                 <Field label="Date produced" htmlFor="produced_on" error={form.errors.produced_on}>
                     <TextInput id="produced_on" type="date" max={todayInGhana()} className="block w-full" value={form.data.produced_on}
                         onChange={(e) => form.setData('produced_on', e.target.value)} />
+                </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <Field label="Expires on (optional)" htmlFor="expires_on" error={form.errors.expires_on}>
+                    <TextInput id="expires_on" type="date" min={form.data.produced_on || undefined} className="block w-full" value={form.data.expires_on}
+                        onChange={(e) => form.setData('expires_on', e.target.value)} />
+                </Field>
+                <Field label="Lot code" htmlFor="lot_code">
+                    <TextInput id="lot_code" className="block w-full font-mono text-sm" value={lotCodePreview} readOnly tabIndex={-1} />
                 </Field>
             </div>
         </FormModal>

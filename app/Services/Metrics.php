@@ -8,10 +8,13 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\ReturnStatus;
 use App\Enums\Role;
+use App\Enums\StockRequestStatus;
 use App\Models\Location;
 use App\Models\OnlineOrder;
 use App\Models\Product;
+use App\Models\ProductionLot;
 use App\Models\ReturnRequest;
+use App\Models\StockRequest;
 use App\Models\User;
 use App\Support\MetricFilter;
 use App\Support\Money;
@@ -464,9 +467,26 @@ class Metrics
             $items[] = ['tone' => 'red', 'text' => "{$products[$row['product_id']]->name} does not reconcile (rule B6)", 'route' => 'stock.index'];
         }
 
+        $openLots = ProductionLot::query()->open()->withExpiry()->get();
+        $expiredLots = $openLots->filter(fn (ProductionLot $lot) => $lot->isExpired())->count();
+        $expiringLots = $openLots->filter(fn (ProductionLot $lot) => $lot->isExpiringSoon())->count();
+        $days = (int) config('inventory.lot_expiring_days');
+
+        if ($expiredLots) {
+            $items[] = ['tone' => 'red', 'text' => "{$expiredLots} production lot(s) expired with stock still on hand", 'route' => 'stock.lots'];
+        }
+        if ($expiringLots) {
+            $items[] = ['tone' => 'amber', 'text' => "{$expiringLots} production lot(s) expire within {$days} days", 'route' => 'stock.lots'];
+        }
+
         $pendingReturns = ReturnRequest::where('status', ReturnStatus::Requested)->count();
         if ($pendingReturns) {
             $items[] = ['tone' => 'blue', 'text' => "{$pendingReturns} return(s) waiting for the warehouse", 'route' => 'returns.index'];
+        }
+
+        $pendingStockRequests = StockRequest::where('status', StockRequestStatus::Requested)->count();
+        if ($pendingStockRequests) {
+            $items[] = ['tone' => 'blue', 'text' => "{$pendingStockRequests} stock request(s) waiting for the warehouse", 'route' => 'stock-requests.index'];
         }
 
         $toPack = OnlineOrder::where('status', OrderStatus::Paid)

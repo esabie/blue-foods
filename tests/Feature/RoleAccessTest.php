@@ -34,9 +34,12 @@ function endpointMatrix(): array
         ['GET', 'orders.index', [], $stock],
         ['POST', 'orders.pack', ['order'], $stock],
         ['POST', 'orders.complete', ['order'], $stock],
+        ['POST', 'orders.approve-payment', ['order'], $mgmt],
         ['POST', 'orders.cancel', ['order'], $mgmt],
         ['GET', 'website.edit', [], $mgmt],
         ['POST', 'website.update', [], $mgmt],
+        ['GET', 'bulk-sms.create', [], $mgmt],
+        ['POST', 'bulk-sms.store', [], $mgmt],
 
         ['GET', 'products.index', [], $mgmt],
         ['POST', 'products.store', [], $mgmt],
@@ -63,6 +66,7 @@ function endpointMatrix(): array
         ['GET', 'audit.index', [], $mgmt],
 
         ['GET', 'stock.index', [], $stock],
+        ['GET', 'stock.lots', [], $stock],
         ['GET', 'stock.movements', [], $stock],
         ['POST', 'stock.produce', [], $stock],
         ['POST', 'stock.adjust', [], $stock],
@@ -70,11 +74,15 @@ function endpointMatrix(): array
         ['GET', 'returns.index', [], $stock],
         ['POST', 'returns.confirm', ['returnRequest'], $stock],
         ['POST', 'returns.reject', ['returnRequest'], $stock],
+        ['GET', 'stock-requests.index', [], $stock],
+        ['POST', 'stock-requests.confirm', ['stockRequest'], $stock],
+        ['POST', 'stock-requests.reject', ['stockRequest'], $stock],
 
         ['GET', 'member.home', [], $member],
         ['GET', 'member.sales', [], $member],
         ['POST', 'member.sales.store', [], $member],
         ['POST', 'member.returns.store', [], $member],
+        ['POST', 'member.stock-requests.store', [], $member],
     ];
 }
 
@@ -84,6 +92,7 @@ beforeEach(function () {
     ledger()->assign($w->product, $w->member, 5, $w->manager);
     $sale = ledger()->recordSale($w->member, $w->product, 1);
     $return = ledger()->requestReturn($w->member, $w->product, 1);
+    $stockRequest = ledger()->requestStock($w->member, $w->product, 1);
     ledger()->allocateOnline($w->product, 2, $w->manager);
     $order = placeOnlineOrder([$w->product->id => 1], 'pay_on_delivery');
 
@@ -92,6 +101,7 @@ beforeEach(function () {
         'user' => User::factory()->warehouse()->create(),
         'sale' => $sale,
         'returnRequest' => $return,
+        'stockRequest' => $stockRequest,
         'order' => $order,
         'type' => 'sales-summary',
         'notification' => $w->manager->notifications()->first()->id,
@@ -132,15 +142,16 @@ function publicRoutes(): array
 {
     return [
         'login', 'logout', 'password.request', 'password.email', 'password.reset', 'password.store', 'storage.local', 'storage.local.upload', 'sanctum.csrf-cookie',
-        'site.home', 'site.about', 'site.contact', 'site.sitemap',
+        'site.home', 'site.about', 'site.contact', 'site.privacy', 'site.terms', 'site.faq', 'site.sitemap',
         'shop.index', 'shop.show', 'cart.show', 'cart.add', 'cart.update', 'cart.clear', 'checkout.show', 'checkout.store',
+        'shop.track', 'shop.track.lookup',
         'shop.orders.show', 'shop.orders.pay', 'shop.payments.return', 'shop.payments.webhook',
         'shop.sandbox.show', 'shop.sandbox.complete',
     ];
 }
 
 test('public website pages need no sign-in', function () {
-    foreach (['site.home', 'site.about', 'site.contact', 'shop.index', 'cart.show', 'site.sitemap'] as $name) {
+    foreach (['site.home', 'site.about', 'site.contact', 'site.privacy', 'site.terms', 'site.faq', 'shop.index', 'shop.track', 'cart.show', 'site.sitemap'] as $name) {
         $this->get(route($name))->assertOk();
     }
     $this->get(route('shop.show', $this->params['product']->sku))->assertOk();

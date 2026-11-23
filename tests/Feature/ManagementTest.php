@@ -17,7 +17,6 @@ beforeEach(function () {
 
 test('P1: management creates a product with a price in pesewas', function () {
     $this->actingAs($this->manager)->post(route('products.store'), [
-        'sku' => 'BF-TIL-500',
         'name' => 'Smoked tilapia',
         'category' => 'Smoked fish',
         'unit' => 'pack',
@@ -26,17 +25,25 @@ test('P1: management creates a product with a price in pesewas', function () {
         'photo' => UploadedFile::fake()->image('tilapia.jpg'),
     ])->assertSessionHasNoErrors();
 
-    $product = Product::where('sku', 'BF-TIL-500')->sole();
-    expect($product->currentPricePesewas())->toBe(3550)
+    $product = Product::where('name', 'Smoked tilapia')->sole();
+    expect($product->sku)->toBe('BF-SMO-TIL')
+        ->and($product->currentPricePesewas())->toBe(3550)
         ->and($product->currentPrice->set_by)->toBe($this->manager->id);
 });
 
-test('P1: SKU codes are unique', function () {
-    Product::factory()->priced()->create(['sku' => 'BF-1']);
+test('P1: SKU codes are auto-generated and stay unique', function () {
+    Product::factory()->priced()->create(['sku' => 'BF-SMO-TIL']);
 
     $this->actingAs($this->manager)->post(route('products.store'), [
-        'sku' => 'BF-1', 'name' => 'X', 'category' => 'Y', 'unit' => 'pack', 'reorder_level' => 0, 'price' => '1',
-    ])->assertSessionHasErrors('sku');
+        'name' => 'Smoked tilapia',
+        'category' => 'Y',
+        'unit' => 'pack',
+        'reorder_level' => 0,
+        'price' => '1',
+        'photo' => UploadedFile::fake()->image('a.jpg'),
+    ])->assertSessionHasNoErrors();
+
+    expect(Product::where('name', 'Smoked tilapia')->sole()->sku)->toBe('BF-SMO-TIL-2');
 });
 
 test('P2: price history is kept with effective dates', function () {
@@ -52,14 +59,14 @@ test('P2: price history is kept with effective dates', function () {
 test('a product can be created with a cost, which is optional', function () {
     $fields = ['category' => 'Fish', 'unit' => 'pack', 'reorder_level' => 0, 'price' => '35.50'];
     $this->actingAs($this->manager)->post(route('products.store'), [
-        'sku' => 'BF-1', 'name' => 'With cost', 'cost' => '20.25', 'photo' => UploadedFile::fake()->image('a.jpg'), ...$fields,
+        'name' => 'With cost', 'cost' => '20.25', 'photo' => UploadedFile::fake()->image('a.jpg'), ...$fields,
     ])->assertSessionHasNoErrors();
     $this->post(route('products.store'), [
-        'sku' => 'BF-2', 'name' => 'No cost', 'cost' => '', 'photo' => UploadedFile::fake()->image('b.jpg'), ...$fields,
+        'name' => 'No cost', 'cost' => '', 'photo' => UploadedFile::fake()->image('b.jpg'), ...$fields,
     ])->assertSessionHasNoErrors();
 
-    expect(Product::where('sku', 'BF-1')->sole()->currentCost->unit_cost_pesewas)->toBe(2025)
-        ->and(Product::where('sku', 'BF-2')->sole()->costs()->exists())->toBeFalse();
+    expect(Product::where('name', 'With cost')->sole()->currentCost->unit_cost_pesewas)->toBe(2025)
+        ->and(Product::where('name', 'No cost')->sole()->costs()->exists())->toBeFalse();
 });
 
 test('cost changes are kept as history, may be backdated but not set in the future, and are audited', function () {

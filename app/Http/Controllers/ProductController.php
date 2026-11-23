@@ -72,14 +72,17 @@ class ProductController extends Controller
     {
         $data = $request->validate([
             ...$this->detailRules(),
-            'sku' => ['required', 'string', 'max:50', 'unique:products,sku'],
             'price' => ['required', 'string', 'regex:'.Money::PATTERN],
             'cost' => ['nullable', 'string', 'regex:'.Money::PATTERN],
             'photo' => ['required', 'image', 'max:4096'],
         ]);
 
         $product = DB::transaction(function () use ($data, $request) {
-            $product = Product::create([...collect($data)->except(['price', 'cost', 'photo'])->all(), 'status' => ProductStatus::Active]);
+            $product = Product::create([
+                ...collect($data)->except(['price', 'cost', 'photo'])->all(),
+                'sku' => Product::generateSku($data['name']),
+                'status' => ProductStatus::Active,
+            ]);
 
             $product->prices()->create([
                 'unit_price_pesewas' => Money::toPesewas($data['price']),
@@ -100,7 +103,7 @@ class ProductController extends Controller
 
         $product->update(['photo_path' => $request->file('photo')->store('products', 'public')]);
 
-        return back()->with('success', "Product {$data['name']} created.");
+        return back()->with('success', "Product {$product->name} created ({$product->sku}).");
     }
 
     public function update(Request $request, Product $product): RedirectResponse

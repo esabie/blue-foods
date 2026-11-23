@@ -5,7 +5,7 @@ namespace App\Services\Sms;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Writes messages to the log until an SMS provider is chosen.
+ * Writes messages to the log (local / testing). Use SMS_DRIVER=mnotify in production.
  */
 class LogSmsSender implements SmsSender
 {

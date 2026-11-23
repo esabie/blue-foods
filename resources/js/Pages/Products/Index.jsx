@@ -9,7 +9,19 @@ import { formatDate, formatDateTime, formatGhs, todayInGhana, toCedisInput, toPe
 import { router, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-const blank = { sku: '', name: '', category: '', unit: '', description: '', reorder_level: '0', price: '', cost: '', photo: null };
+const blank = { name: '', category: '', unit: '', description: '', reorder_level: '0', price: '', cost: '', photo: null };
+
+/** Mirrors Product::generateSku for the create-form preview (server still assigns the real code). */
+function previewSku(name) {
+    const parts = String(name || '')
+        .trim()
+        .split(/\s+/)
+        .map((word) => word.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase())
+        .filter(Boolean)
+        .slice(0, 3);
+
+    return parts.length ? `BF-${parts.join('-')}` : 'Generated from the product name';
+}
 
 function margin(price, cost) {
     if (!price || cost === null || cost === undefined) return null;
@@ -243,18 +255,22 @@ function ProductModal({ show, product, onClose }) {
                 <Field label="Name" htmlFor="name" error={form.errors.name}>
                     <TextInput id="name" className="block w-full" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
                 </Field>
-                <Field label="SKU code" htmlFor="sku" error={form.errors.sku}>
-                    <TextInput id="sku" className="block w-full font-mono" value={form.data.sku} onChange={(e) => form.setData('sku', e.target.value.toUpperCase())} />
+                <Field label="SKU code" htmlFor="sku" error={form.errors.sku}
+                    hint={product ? undefined : 'Assigned automatically from the product name'}>
+                    <TextInput
+                        id="sku"
+                        className="block w-full font-mono text-sm"
+                        value={product ? form.data.sku : previewSku(form.data.name)}
+                        readOnly={!product}
+                        tabIndex={product ? undefined : -1}
+                        onChange={product ? (e) => form.setData('sku', e.target.value.toUpperCase()) : undefined}
+                    />
                 </Field>
                 <Field label="Category" htmlFor="category" error={form.errors.category}>
                     <TextInput id="category" className="block w-full" value={form.data.category} onChange={(e) => form.setData('category', e.target.value)} />
                 </Field>
                 <Field label="Unit of measure" htmlFor="unit" error={form.errors.unit} hint="e.g. pack, kg, tray">
                     <TextInput id="unit" className="block w-full" value={form.data.unit} onChange={(e) => form.setData('unit', e.target.value)} />
-                </Field>
-                <Field label="Reorder level" htmlFor="reorder_level" error={form.errors.reorder_level} hint="Flag when unassigned stock falls below this">
-                    <TextInput id="reorder_level" type="number" min="0" className="block w-full" value={form.data.reorder_level}
-                        onChange={(e) => form.setData('reorder_level', e.target.value)} />
                 </Field>
                 {!product && (
                     <>
@@ -268,6 +284,11 @@ function ProductModal({ show, product, onClose }) {
                         </Field>
                     </>
                 )}
+                <Field label="Reorder level" htmlFor="reorder_level" error={form.errors.reorder_level} className="col-span-2"
+                    hint="Flag when unassigned stock falls below this">
+                    <TextInput id="reorder_level" type="number" min="0" className="block w-full sm:max-w-xs" value={form.data.reorder_level}
+                        onChange={(e) => form.setData('reorder_level', e.target.value)} />
+                </Field>
                 <Field label="Website description" htmlFor="description" error={form.errors.description} className="col-span-2"
                     hint="Shown on the product page of the online shop.">
                     <textarea id="description" rows={4} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-sky-600 focus:ring-sky-600"

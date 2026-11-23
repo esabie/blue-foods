@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\BulkSmsController;
 use App\Http\Controllers\CashController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardsController;
@@ -13,9 +14,11 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\Site\CheckoutController;
+use App\Http\Controllers\StockRequestController;
 use App\Http\Controllers\Site\PaymentController;
 use App\Http\Controllers\Site\ShopController;
 use App\Http\Controllers\Site\SiteController;
+use App\Http\Controllers\Site\TrackController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WebsiteController;
@@ -28,6 +31,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [SiteController::class, 'home'])->name('site.home');
 Route::get('/about', [SiteController::class, 'about'])->name('site.about');
 Route::get('/contact', [SiteController::class, 'contact'])->name('site.contact');
+Route::get('/privacy', [SiteController::class, 'privacy'])->name('site.privacy');
+Route::get('/terms', [SiteController::class, 'terms'])->name('site.terms');
+Route::get('/faq', [SiteController::class, 'faq'])->name('site.faq');
 Route::get('/sitemap.xml', [SiteController::class, 'sitemap'])->name('site.sitemap');
 
 Route::get('/shop', [ShopController::class, 'index'])->name('shop.index');
@@ -40,6 +46,9 @@ Route::post('/cart/clear', [CheckoutController::class, 'clearCart'])->name('cart
 
 Route::get('/checkout', [CheckoutController::class, 'show'])->name('checkout.show');
 Route::post('/checkout', [CheckoutController::class, 'store'])->middleware('throttle:10,1')->name('checkout.store');
+
+Route::get('/track', [TrackController::class, 'show'])->name('shop.track');
+Route::post('/track', [TrackController::class, 'lookup'])->middleware('throttle:10,1')->name('shop.track.lookup');
 
 Route::get('/order/{order:reference}', [PaymentController::class, 'order'])->name('shop.orders.show');
 Route::post('/order/{order:reference}/pay', [PaymentController::class, 'pay'])->middleware('throttle:10,1')->name('shop.orders.pay');
@@ -92,10 +101,16 @@ Route::middleware('auth')->group(function () {
 
         Route::post('/stock/allocate-online', [StockController::class, 'allocateOnline'])->name('stock.allocate-online');
 
+        Route::post('/online-orders/{order}/approve-payment', [OrderController::class, 'approvePayment'])->name('orders.approve-payment');
         Route::post('/online-orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
 
         Route::get('/website', [WebsiteController::class, 'edit'])->name('website.edit');
         Route::post('/website', [WebsiteController::class, 'update'])->name('website.update');
+
+        Route::get('/bulk-sms', [BulkSmsController::class, 'create'])->name('bulk-sms.create');
+        Route::post('/bulk-sms', [BulkSmsController::class, 'store'])
+            ->middleware('throttle:10,1')
+            ->name('bulk-sms.store');
 
         Route::get('/audit-log', [AuditLogController::class, 'index'])->name('audit.index');
     });
@@ -104,6 +119,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboards/stock', [DashboardsController::class, 'stock'])->name('dashboards.stock');
 
         Route::get('/stock', [StockController::class, 'index'])->name('stock.index');
+        Route::get('/stock/lots', [StockController::class, 'lots'])->name('stock.lots');
         Route::get('/stock/movements', [StockController::class, 'movements'])->name('stock.movements');
         Route::post('/stock/produce', [StockController::class, 'produce'])->name('stock.produce');
         Route::post('/stock/adjust', [StockController::class, 'adjust'])->name('stock.adjust');
@@ -115,6 +131,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/returns/{returnRequest}/confirm', [ReturnController::class, 'confirm'])->name('returns.confirm');
         Route::post('/returns/{returnRequest}/reject', [ReturnController::class, 'reject'])->name('returns.reject');
 
+        Route::get('/stock-requests', [StockRequestController::class, 'index'])->name('stock-requests.index');
+        Route::post('/stock-requests/{stockRequest}/confirm', [StockRequestController::class, 'confirm'])->name('stock-requests.confirm');
+        Route::post('/stock-requests/{stockRequest}/reject', [StockRequestController::class, 'reject'])->name('stock-requests.reject');
+
         Route::get('/online-orders', [OrderController::class, 'index'])->name('orders.index');
         Route::post('/online-orders/{order}/pack', [OrderController::class, 'pack'])->name('orders.pack');
         Route::post('/online-orders/{order}/complete', [OrderController::class, 'complete'])->name('orders.complete');
@@ -125,6 +145,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/sales', [MemberController::class, 'sales'])->name('sales');
         Route::post('/sales', [MemberController::class, 'storeSale'])->name('sales.store');
         Route::post('/returns', [MemberController::class, 'storeReturn'])->name('returns.store');
+        Route::post('/stock-requests', [MemberController::class, 'storeStockRequest'])->name('stock-requests.store');
     });
 });
 

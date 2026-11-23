@@ -1,9 +1,11 @@
 <?php
 
 use App\Enums\AdjustmentReason;
+use App\Jobs\SendSms;
 use App\Models\User;
 use App\Services\StaffNotifier;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 
 /**
  * Titles of a user's notifications, newest first.
@@ -84,6 +86,52 @@ test('returns notify the warehouse when asked and the member when decided', func
     $member = $w->member->fresh()->notifications()->get()->keyBy('data.title');
     expect($member->keys()->all())->toContain('Return received', 'Return not accepted')
         ->and($member['Return not accepted']->data['body'])->toContain('Packs were damaged');
+});
+
+test('stock requests notify the warehouse when asked and the member when declined', function () {
+    $w = stockWorld();
+    ledger()->produce($w->product, 10, $w->warehouse);
+
+    $request = ledger()->requestStock($w->member, $w->product, 3, 'Need more for Accra');
+
+    expect(titlesFor($w->warehouse))->toBe(['Stock request'])
+        ->and($w->warehouse->notifications()->first()->data['body'])
+        ->toContain($w->member->name)->toContain('Need more for Accra')
+        ->and($w->warehouse->notifications()->first()->data['url'])->toBe('/stock-requests');
+
+    ledger()->rejectStockRequest($request, $w->warehouse, 'Restocking tomorrow morning.');
+
+    $member = $w->member->fresh()->notifications()->get()->keyBy('data.title');
+    expect($member->keys()->all())->toContain('Stock request declined')
+        ->and($member['Stock request declined']->data['body'])->toContain('Restocking tomorrow morning.');
+});
+
+test('fulfilling a stock request texts the member and says when it is partial', function () {
+    Queue::fake();
+    config([
+        'services.sms.staff_alerts' => true,
+        'services.sms.staff_alert_types' => ['stock_request_fulfilled', 'stock_request_declined'],
+    ]);
+
+    $w = stockWorld(2500);
+    ledger()->produce($w->product, 200, $w->warehouse);
+    $request = ledger()->requestStock($w->member, $w->product, 100);
+
+    ledger()->confirmStockRequest($request, $w->warehouse, 90);
+
+    expect(titlesFor($w->member))->toBe(['Stock request filled'])
+        ->and($w->member->notifications()->first()->data['body'])->toContain('90 of 100');
+
+    Queue::assertPushed(SendSms::class, fn (SendSms $job) => $job->to === $w->member->phone
+        && str_contains($job->message, 'Stock request filled')
+        && str_contains($job->message, '90 of 100'));
+
+    Queue::fake();
+    $declined = ledger()->requestStock($w->member, $w->product, 5);
+    ledger()->rejectStockRequest($declined, $w->warehouse, 'Out until Friday.');
+
+    Queue::assertPushed(SendSms::class, fn (SendSms $job) => $job->to === $w->member->phone
+        && str_contains($job->message, 'Stock request declined'));
 });
 
 test('a member hears about stock assigned to them and sales reversed', function () {
@@ -176,4 +224,42 @@ test('every staff page shares the unread count', function () {
 
     $this->actingAs($w->member)->get(route('member.home'))
         ->assertInertia(fn ($page) => $page->where('unreadNotifications', 1));
+});
+
+test('urgent staff alerts can also be texted when STAFF_SMS_ALERTS is on', function () {
+    Queue::fake();
+    config([
+        'services.sms.staff_alerts' => true,
+        'services.sms.staff_alert_types' => ['order_to_pack', 'low_stock'],
+    ]);
+
+    $w = stockWorld();
+    ledger()->produce($w->product, 10, $w->warehouse);
+    ledger()->allocateOnline($w->product, 5, $w->manager);
+
+    placeOnlineOrder([$w->product->id => 1], 'pay_on_delivery');
+
+    Queue::assertPushed(SendSms::class, fn (SendSms $job) => $job->to === $w->manager->phone
+        && str_contains($job->message, 'New online order to pack'));
+    Queue::assertPushed(SendSms::class, fn (SendSms $job) => $job->to === $w->warehouse->phone
+        && str_contains($job->message, 'New online order to pack'));
+    Queue::assertNotPushed(SendSms::class, fn (SendSms $job) => $job->to === $w->member->phone);
+
+    Queue::fake();
+    ledger()->assign($w->product, $w->member, 1, $w->manager);
+    Queue::assertNotPushed(SendSms::class);
+});
+
+test('staff SMS stays off when STAFF_SMS_ALERTS is disabled', function () {
+    Queue::fake();
+    config(['services.sms.staff_alerts' => false]);
+
+    $w = stockWorld();
+    ledger()->produce($w->product, 10, $w->warehouse);
+    ledger()->allocateOnline($w->product, 5, $w->manager);
+    placeOnlineOrder([$w->product->id => 1], 'pay_on_delivery');
+
+    expect(titlesFor($w->warehouse))->toBe(['New online order to pack']);
+    Queue::assertNotPushed(SendSms::class, fn (SendSms $job) => in_array($job->to, [$w->manager->phone, $w->warehouse->phone], true));
+    Queue::assertPushed(SendSms::class, fn (SendSms $job) => str_contains($job->message, 'order') && $job->to === '+233241234567');
 });

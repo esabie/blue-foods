@@ -77,23 +77,24 @@ test('W3: a new product is created with its photo, which is required', function 
     $fields = ['category' => 'Fish', 'unit' => 'pack', 'reorder_level' => 0, 'price' => '35.50'];
 
     $this->actingAs($this->manager)->post(route('products.store'), [
-        'sku' => 'BF-1', 'name' => 'With photo', 'photo' => UploadedFile::fake()->image('fish.jpg'), ...$fields,
+        'name' => 'With photo', 'photo' => UploadedFile::fake()->image('fish.jpg'), ...$fields,
     ])->assertSessionHasNoErrors();
-    $this->post(route('products.store'), ['sku' => 'BF-2', 'name' => 'No photo', ...$fields])->assertSessionHasErrors('photo');
+    $this->post(route('products.store'), ['name' => 'No photo', ...$fields])->assertSessionHasErrors('photo');
 
-    $product = Product::where('sku', 'BF-1')->sole();
+    $product = Product::where('name', 'With photo')->sole();
+    expect($product->sku)->toBe('BF-WIT-PHO');
     Storage::disk('public')->assertExists($product->photo_path);
     $this->get(route('shop.show', $product->sku))->assertSee($product->photoUrl());
-    expect(Product::where('sku', 'BF-2')->exists())->toBeFalse();
+    expect(Product::where('name', 'No photo')->exists())->toBeFalse();
 });
 
 test('a new product is not created when its photo is not an image', function () {
     $this->actingAs($this->manager)->post(route('products.store'), [
-        'sku' => 'BF-1', 'name' => 'X', 'category' => 'Fish', 'unit' => 'pack', 'reorder_level' => 0, 'price' => '1',
+        'name' => 'X', 'category' => 'Fish', 'unit' => 'pack', 'reorder_level' => 0, 'price' => '1',
         'photo' => UploadedFile::fake()->create('notes.pdf', 10, 'application/pdf'),
     ])->assertSessionHasErrors('photo');
 
-    expect(Product::where('sku', 'BF-1')->exists())->toBeFalse();
+    expect(Product::where('name', 'X')->exists())->toBeFalse();
 });
 
 test('product photo must be an image', function () {
@@ -112,8 +113,15 @@ test('W12: sitemap lists the pages and active products, and pages have titles an
         ->assertOk()
         ->assertHeader('Content-Type', 'application/xml')
         ->assertSee(route('shop.index'))
+        ->assertSee(route('site.privacy'))
+        ->assertSee(route('site.terms'))
+        ->assertSee(route('site.faq'))
         ->assertSee(route('shop.show', $active->sku))
         ->assertDontSee(route('shop.show', $retired->sku));
+
+    $this->get(route('site.privacy'))->assertOk()->assertSee('Privacy policy');
+    $this->get(route('site.terms'))->assertOk()->assertSee('Terms and conditions');
+    $this->get(route('site.faq'))->assertOk()->assertSee('Frequently asked questions')->assertSee('How do I track my order?');
 
     $this->get(route('shop.show', $active->sku))
         ->assertSee("<title>{$active->name} | Blue Foods</title>", false)

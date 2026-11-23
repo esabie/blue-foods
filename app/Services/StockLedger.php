@@ -6,6 +6,7 @@ use App\Enums\AdjustmentReason;
 use App\Enums\MovementType;
 use App\Enums\ReturnStatus;
 use App\Enums\Role;
+use App\Enums\StockRequestStatus;
 use App\Exceptions\StockRuleException;
 use App\Models\AuditLog;
 use App\Models\Location;
@@ -13,6 +14,7 @@ use App\Models\Product;
 use App\Models\ReturnRequest;
 use App\Models\Sale;
 use App\Models\StockMovement;
+use App\Models\StockRequest;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -29,19 +31,39 @@ use Illuminate\Support\Facades\DB;
  */
 class StockLedger
 {
-    public function __construct(private readonly StaffNotifier $notifier) {}
+    public function __construct(
+        private readonly StaffNotifier $notifier,
+        private readonly LotTracker $lots,
+        private readonly CashBook $cash,
+    ) {}
 
-    public function produce(Product $product, int $quantity, User $actor, ?CarbonInterface $producedOn = null): StockMovement
-    {
+    public function produce(
+        Product $product,
+        int $quantity,
+        User $actor,
+        ?CarbonInterface $producedOn = null,
+        ?CarbonInterface $expiresOn = null,
+    ): StockMovement {
         $this->ensurePositive($quantity);
         $this->ensureActive($product);
 
         $occurredAt = ($producedOn === null || $producedOn->isToday()) ? now() : $producedOn->copy()->startOfDay();
+        $producedDate = ($producedOn ?? now())->copy()->startOfDay();
 
-        return $this->move(MovementType::Produced, $product, $quantity, $actor, [
-            'to_location_id' => Location::warehouse()->id,
-            'occurred_at' => $occurredAt,
-        ]);
+        if ($expiresOn !== null && $expiresOn->copy()->startOfDay()->lt($producedDate)) {
+            throw StockRuleException::for('expires_on', 'Expiry date must be on or after the production date.');
+        }
+
+        return DB::transaction(function () use ($product, $quantity, $actor, $occurredAt, $producedDate, $expiresOn) {
+            $movement = $this->move(MovementType::Produced, $product, $quantity, $actor, [
+                'to_location_id' => Location::warehouse()->id,
+                'occurred_at' => $occurredAt,
+            ]);
+
+            $this->lots->openForProduce($product, $movement, $quantity, $producedDate, $expiresOn?->copy()->startOfDay());
+
+            return $movement;
+        });
     }
 
     public function adjust(
@@ -61,16 +83,22 @@ class StockLedger
         $warehouse = Location::warehouse();
 
         if ($increase) {
-            return $this->move(MovementType::AdjustedIn, $product, $quantity, $actor, [
-                'to_location_id' => $warehouse->id,
-                'reason' => $reason->value,
-                'note' => $note,
-            ]);
+            return DB::transaction(function () use ($product, $quantity, $reason, $note, $actor, $warehouse) {
+                $movement = $this->move(MovementType::AdjustedIn, $product, $quantity, $actor, [
+                    'to_location_id' => $warehouse->id,
+                    'reason' => $reason->value,
+                    'note' => $note,
+                ]);
+                $this->lots->restock($product, $quantity);
+
+                return $movement;
+            });
         }
 
         return DB::transaction(function () use ($product, $quantity, $reason, $note, $actor, $warehouse) {
             $this->lock($warehouse->id);
             $this->ensureAvailable($product, $warehouse->id, $quantity, 'in the warehouse');
+            $this->lots->consume($product, $quantity);
 
             $movement = $this->move(MovementType::AdjustedOut, $product, $quantity, $actor, [
                 'from_location_id' => $warehouse->id,
@@ -86,23 +114,26 @@ class StockLedger
     /**
      * A1/A2: move unassigned stock to a team member at the price in force now.
      */
-    public function assign(Product $product, User $member, int $quantity, User $actor): StockMovement
+    public function assign(Product $product, User $member, int $quantity, User $actor, bool $notify = true): StockMovement
     {
         $this->ensurePositive($quantity);
         $this->ensureActive($product);
         $memberLocation = $this->memberLocation($member);
         $warehouse = Location::warehouse();
 
-        return DB::transaction(function () use ($product, $member, $quantity, $actor, $warehouse, $memberLocation) {
+        return DB::transaction(function () use ($product, $member, $quantity, $actor, $warehouse, $memberLocation, $notify) {
             $this->lock($warehouse->id);
             $this->ensureAvailable($product, $warehouse->id, $quantity, 'unassigned');
+            $this->lots->consume($product, $quantity);
 
             $movement = $this->move(MovementType::Assigned, $product, $quantity, $actor, [
                 'from_location_id' => $warehouse->id,
                 'to_location_id' => $memberLocation->id,
                 'unit_price_pesewas' => $product->currentPricePesewas(),
             ]);
-            $this->notifier->stockAssigned($movement, $member);
+            if ($notify) {
+                $this->notifier->stockAssigned($movement, $member);
+            }
             $this->warnIfLow($product, $warehouse->id, $quantity);
 
             return $movement;
@@ -122,6 +153,7 @@ class StockLedger
         return DB::transaction(function () use ($product, $quantity, $actor, $warehouse, $online) {
             $this->lock($warehouse->id);
             $this->ensureAvailable($product, $warehouse->id, $quantity, 'unassigned');
+            $this->lots->consume($product, $quantity);
 
             $movement = $this->move(MovementType::AllocatedOnline, $product, $quantity, $actor, [
                 'from_location_id' => $warehouse->id,
@@ -259,6 +291,7 @@ class StockLedger
                 'from_location_id' => $location->id,
                 'to_location_id' => $warehouse->id,
             ]);
+            $this->lots->restock($request->product, $request->quantity);
 
             $request->update([
                 'status' => ReturnStatus::Confirmed,
@@ -288,6 +321,97 @@ class StockLedger
                 'decision_note' => $note,
             ]);
             $this->notifier->returnDecided($request);
+
+            return $request;
+        });
+    }
+
+    /**
+     * A member asks for more stock. Nothing moves until the warehouse assigns it.
+     * Blocked while the member has overdue cash to hand in.
+     */
+    public function requestStock(User $member, Product $product, int $quantity, ?string $note = null): StockRequest
+    {
+        $this->ensurePositive($quantity);
+        $this->ensureActive($product);
+        $this->memberLocation($member);
+
+        if ($this->cash->isOverdue($member)) {
+            throw StockRuleException::for(
+                'member',
+                'Hand in your overdue cash before requesting more stock.',
+            );
+        }
+
+        return DB::transaction(function () use ($member, $product, $quantity, $note) {
+            $request = StockRequest::create([
+                'member_user_id' => $member->id,
+                'product_id' => $product->id,
+                'quantity' => $quantity,
+                'member_note' => $note,
+                'status' => StockRequestStatus::Requested,
+                'requested_at' => now(),
+            ]);
+            $this->notifier->stockRequested($request);
+
+            return $request;
+        });
+    }
+
+    /**
+     * Warehouse/management fulfils a stock request by assigning from unassigned stock.
+     * $quantity may be less than requested when only a partial fulfilment is possible.
+     */
+    public function confirmStockRequest(StockRequest $request, User $actor, ?int $quantity = null): StockMovement
+    {
+        return DB::transaction(function () use ($request, $actor, $quantity) {
+            $request = StockRequest::whereKey($request->id)->lockForUpdate()->firstOrFail();
+
+            if ($request->status !== StockRequestStatus::Requested) {
+                throw StockRuleException::for('stock_request', 'This request has already been '.$request->status->value.'.');
+            }
+
+            $assignQty = $quantity ?? $request->quantity;
+            if ($assignQty < 1) {
+                throw StockRuleException::for('quantity', 'Quantity must be at least 1.');
+            }
+            if ($assignQty > $request->quantity) {
+                throw StockRuleException::for('quantity', "They only asked for {$request->quantity}.");
+            }
+
+            $movement = $this->assign($request->product, $request->member, $assignQty, $actor, notify: false);
+
+            $request->update([
+                'status' => StockRequestStatus::Confirmed,
+                'confirmed_by' => $actor->id,
+                'confirmed_at' => now(),
+                'movement_id' => $movement->id,
+                'decision_note' => $assignQty < $request->quantity
+                    ? "Requested {$request->quantity}; assigned {$assignQty}."
+                    : null,
+            ]);
+            $this->notifier->stockRequestFulfilled($request->fresh(['member', 'product']), $movement);
+
+            return $movement;
+        });
+    }
+
+    public function rejectStockRequest(StockRequest $request, User $actor, string $note): StockRequest
+    {
+        return DB::transaction(function () use ($request, $actor, $note) {
+            $request = StockRequest::whereKey($request->id)->lockForUpdate()->firstOrFail();
+
+            if ($request->status !== StockRequestStatus::Requested) {
+                throw StockRuleException::for('stock_request', 'This request has already been '.$request->status->value.'.');
+            }
+
+            $request->update([
+                'status' => StockRequestStatus::Rejected,
+                'confirmed_by' => $actor->id,
+                'confirmed_at' => now(),
+                'decision_note' => $note,
+            ]);
+            $this->notifier->stockRequestRejected($request);
 
             return $request;
         });

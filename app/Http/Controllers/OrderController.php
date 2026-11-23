@@ -86,7 +86,15 @@ class OrderController extends Controller
             'tabs' => self::TABS,
             'counts' => collect($scopes)->map(fn ($scope) => $scope($query())->count()),
             'canCancel' => $request->user()->hasRole(Role::Management),
+            'canApprovePayment' => $request->user()->hasRole(Role::Management),
         ]);
+    }
+
+    public function approvePayment(Request $request, OnlineOrder $order): RedirectResponse
+    {
+        $this->shop->approvePayment($order, $request->user());
+
+        return back()->with('success', "Payment approved for {$order->reference}. The customer has been texted.");
     }
 
     public function pack(Request $request, OnlineOrder $order): RedirectResponse

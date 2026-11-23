@@ -14,11 +14,15 @@ export default function FormModal({
 }) {
     return (
         <Modal show={show} onClose={onClose} maxWidth={maxWidth}>
-            <form onSubmit={onSubmit} className="p-6">
-                <h2 className="text-lg font-medium text-gray-900">{title}</h2>
-                <div className="mt-4 space-y-4">{children}</div>
-                <div className="mt-6 flex justify-end gap-3">
-                    <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+            <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+                <div className="shrink-0 border-b border-gray-100 px-6 py-4">
+                    <h2 className="text-lg font-medium text-gray-900">{title}</h2>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                    <div className="space-y-4">{children}</div>
+                </div>
+                <div className="flex shrink-0 justify-end gap-3 border-t border-gray-100 px-6 py-4">
+                    <SecondaryButton type="button" onClick={onClose}>Cancel</SecondaryButton>
                     <PrimaryButton disabled={processing}>{submitLabel}</PrimaryButton>
                 </div>
             </form>

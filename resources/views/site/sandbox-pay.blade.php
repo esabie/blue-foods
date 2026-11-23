@@ -9,7 +9,7 @@
             <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Sandbox payment provider</p>
             <h1 class="mt-2 text-xl font-bold text-gray-900">Pay {{ \App\Support\Money::format($payment->amount_pesewas) }}</h1>
             <p class="mt-1 text-sm text-gray-600">Order {{ $payment->order->reference }} &middot; {{ $payment->method->label() }}</p>
-            <p class="mt-4 text-sm text-gray-600">This page stands in for the payment provider while testing. No money moves. Set <code>PAYMENT_DRIVER=paystack</code> to use the real provider.</p>
+            <p class="mt-4 text-sm text-gray-600">This page stands in for the payment provider while testing. No money moves. Set <code>PAYMENT_DRIVER=mivopay</code> to use the real provider.</p>
 
             <div class="mt-6 flex gap-3">
                 <form method="POST" action="{{ route('shop.sandbox.complete', $payment->reference) }}">

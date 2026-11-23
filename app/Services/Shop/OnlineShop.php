@@ -131,8 +131,9 @@ class OnlineShop
 
         if ($method === PaymentMethod::PayOnDelivery) {
             $this->notifier->orderToPack($order);
-            $this->textCustomer($order, "Blue Foods: order {$order->reference} received. Total ".Money::format($order->total_pesewas).', to pay on '.strtolower($delivery->label()).'.');
         }
+
+        $this->notifyOrderPlaced($order);
 
         return $order;
     }
@@ -217,10 +218,39 @@ class OnlineShop
 
         if ($order !== null) {
             $this->notifier->orderToPack($order);
-            $this->textCustomer($order, 'Blue Foods: payment of '.Money::format($order->total_pesewas)." received for order {$order->reference}. We will let you know when it is on its way.");
+            $this->notifyPaymentReceived($order);
         }
 
         return $payment->order->fresh();
+    }
+
+    /**
+     * Staff confirmation while a live payment provider is not yet configured.
+     * Marks the order paid (same path as a provider callback) and texts the checkout phone.
+     */
+    public function approvePayment(OnlineOrder $order, User $user): OnlineOrder
+    {
+        if ($order->payment_method === PaymentMethod::PayOnDelivery) {
+            throw StockRuleException::for('payment', 'Confirm cash when marking this pay-on-delivery order delivered or collected.');
+        }
+
+        if ($order->isPaid() || $order->status !== OrderStatus::PendingPayment) {
+            throw StockRuleException::for('payment', 'Only orders awaiting online payment can be approved.');
+        }
+
+        $payment = $order->payments()->where('status', PaymentStatus::Pending)->latest('id')->first();
+
+        if ($payment === null) {
+            $payment = $order->payments()->create([
+                'reference' => $order->reference.'-'.Str::upper(Str::random(6)),
+                'provider' => 'manual',
+                'method' => $order->payment_method,
+                'amount_pesewas' => $order->total_pesewas,
+                'status' => PaymentStatus::Pending,
+            ]);
+        }
+
+        return $this->confirmPayment($payment, 'MANUAL-'.$user->id, $order->total_pesewas);
     }
 
     public function failPayment(Payment $payment, string $reason): void
@@ -261,6 +291,7 @@ class OnlineShop
         }
 
         $this->transition($order, OrderStatus::Packed, $user);
+        $this->notifyOrderPacked($order->fresh());
     }
 
     /**
@@ -277,6 +308,7 @@ class OnlineShop
 
         if ($order->isPaid()) {
             $this->transition($order, $final, $user);
+            $this->notifyOrderFulfilled($order->fresh());
 
             return;
         }
@@ -302,6 +334,70 @@ class OnlineShop
             $order->update(['paid_at' => now()]);
             $this->transition($order, $final, $user, 'Cash received');
         });
+
+        $order = $order->fresh();
+        $this->notifyPaymentReceived($order);
+        $this->notifyOrderFulfilled($order);
+    }
+
+    private function customerFirstName(OnlineOrder $order): string
+    {
+        return strtok(trim($order->customer_name), ' ') ?: 'there';
+    }
+
+    private function notifyOrderPlaced(OnlineOrder $order): void
+    {
+        $name = $this->customerFirstName($order);
+        $amount = Money::format($order->total_pesewas);
+
+        $detail = $order->payment_method === PaymentMethod::PayOnDelivery
+            ? 'Pay on '.strtolower($order->delivery_method->label())
+            : 'Complete payment to confirm';
+
+        $track = route('shop.track');
+
+        $this->textCustomer(
+            $order,
+            "Hi {$name}, order {$order->reference} received ({$amount}). {$detail}. Track at {$track}"
+        );
+    }
+
+    private function notifyPaymentReceived(OnlineOrder $order): void
+    {
+        $name = $this->customerFirstName($order);
+
+        $this->textCustomer(
+            $order,
+            "Hi {$name}, payment received for order {$order->reference} (".Money::format($order->total_pesewas).'). Blue Foods will share delivery updates.'
+        );
+    }
+
+    private function notifyOrderPacked(OnlineOrder $order): void
+    {
+        $name = $this->customerFirstName($order);
+
+        $detail = $order->delivery_method === DeliveryMethod::Collection
+            ? 'is packed and ready for collection'
+            : 'is packed and on its way soon';
+
+        $this->textCustomer(
+            $order,
+            "Hi {$name}, order {$order->reference} {$detail}. Blue Foods will share delivery updates."
+        );
+    }
+
+    private function notifyOrderFulfilled(OnlineOrder $order): void
+    {
+        $name = $this->customerFirstName($order);
+
+        $detail = $order->delivery_method === DeliveryMethod::Delivery
+            ? 'has been delivered'
+            : 'has been collected';
+
+        $this->textCustomer(
+            $order,
+            "Hi {$name}, order {$order->reference} {$detail}. Thank you for shopping with Blue Foods."
+        );
     }
 
     public function cancel(OnlineOrder $order, User $user, ?string $note = null): void

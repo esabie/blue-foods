@@ -30,13 +30,36 @@ class SiteController extends Controller
         return view('site.contact');
     }
 
+    public function privacy(): View
+    {
+        return view('site.privacy');
+    }
+
+    public function terms(): View
+    {
+        return view('site.terms');
+    }
+
+    public function faq(): View
+    {
+        return view('site.faq');
+    }
+
     /**
      * W12: sitemap for search engines.
      */
     public function sitemap(): Response
     {
-        $urls = collect([route('site.home'), route('shop.index'), route('site.about'), route('site.contact')])
-            ->merge(Product::sellable()->orderBy('name')->get()->map(fn (Product $p) => route('shop.show', $p->sku)));
+        $urls = collect([
+            route('site.home'),
+            route('shop.index'),
+            route('shop.track'),
+            route('site.about'),
+            route('site.contact'),
+            route('site.privacy'),
+            route('site.terms'),
+            route('site.faq'),
+        ])->merge(Product::sellable()->orderBy('name')->get()->map(fn (Product $p) => route('shop.show', $p->sku)));
 
         $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n".view('site.sitemap', ['urls' => $urls])->render();
 

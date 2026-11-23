@@ -15,5 +15,6 @@ Artisan::command('notifications:prune', function () {
 })->purpose('Delete read notifications older than 90 days');
 
 Schedule::command('shop:release-expired')->everyMinute()->withoutOverlapping();
-Schedule::command('stock:check')->dailyAt('05:00');
 Schedule::command('notifications:prune')->dailyAt('04:30');
+Schedule::command('stock:check')->dailyAt('05:00');
+Schedule::command('lots:alert-expiring')->dailyAt('05:15');

@@ -13,12 +13,13 @@ const STATUS_TONE = {
     cancelled: 'gray',
 };
 
-function OrderCard({ order, canCancel }) {
+function OrderCard({ order, canCancel, canApprovePayment }) {
     const [busy, setBusy] = useState(false);
     const [cashConfirmed, setCashConfirmed] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const post = (name, data = {}) => router.post(route(name, order.id), data, { preserveScroll: true, onStart: () => setBusy(true), onFinish: () => setBusy(false) });
     const canPack = order.status === 'paid' || (order.status === 'pending_payment' && order.pay_on_delivery);
+    const awaitingOnlinePayment = order.status === 'pending_payment' && !order.pay_on_delivery && !order.paid;
     const finalLabel = order.delivery_method === 'delivery' ? 'Mark delivered' : 'Mark collected';
     const cancellable = canCancel && !order.paid && ['pending_payment', 'packed'].includes(order.status);
 
@@ -58,6 +59,16 @@ function OrderCard({ order, canCancel }) {
             </ul>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
+                {canApprovePayment && awaitingOnlinePayment && (
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => confirm(`Approve payment for ${order.reference}? The customer will get a confirmation SMS on ${order.phone}.`) && post('orders.approve-payment')}
+                        className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+                    >
+                        Approve payment
+                    </button>
+                )}
                 {canPack && (
                     <button type="button" disabled={busy} onClick={() => post('orders.pack')} className="rounded-md bg-sky-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50">
                         Mark packed
@@ -116,7 +127,7 @@ function OrderCard({ order, canCancel }) {
     );
 }
 
-export default function Index({ orders, tab, tabs, counts, canCancel }) {
+export default function Index({ orders, tab, tabs, counts, canCancel, canApprovePayment }) {
     return (
         <PageShell title="Online orders">
             <nav className="-mb-2 flex gap-1 overflow-x-auto border-b border-gray-200">
@@ -141,7 +152,7 @@ export default function Index({ orders, tab, tabs, counts, canCancel }) {
                 ) : (
                     <ul className="divide-y divide-gray-100">
                         {orders.data.map((order) => (
-                            <OrderCard key={order.id} order={order} canCancel={canCancel} />
+                            <OrderCard key={order.id} order={order} canCancel={canCancel} canApprovePayment={canApprovePayment} />
                         ))}
                     </ul>
                 )}

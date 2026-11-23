@@ -35,6 +35,21 @@ class CashBook
     }
 
     /**
+     * True when the member still owes cash from sales older than cash_due_days.
+     */
+    public function isOverdue(User $member): bool
+    {
+        $outstanding = $this->outstanding($member);
+        if ($outstanding <= 0) {
+            return false;
+        }
+
+        $since = $this->owingSince($member->id, $this->handedIn($member->id));
+
+        return $since !== null && $since->lt($this->dueBefore());
+    }
+
+    /**
      * When the oldest sale not yet covered by hand-ins was made; hand-ins pay off the oldest sales first.
      */
     public function owingSince(int $memberId, int $handedIn): ?CarbonImmutable

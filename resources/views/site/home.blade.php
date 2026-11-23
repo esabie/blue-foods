@@ -52,8 +52,8 @@
                 <p class="mt-2 text-sm text-gray-600">Collect free from {{ $site['collection_point'] }}.</p>
             </div>
             <div>
-                <h3 class="font-semibold text-gray-900">Pay your way</h3>
-                <p class="mt-2 text-sm text-gray-600">Mobile money, card, or pay when you receive your order.</p>
+                <h3 class="font-semibold text-gray-900">Pay with mobile money</h3>
+                <p class="mt-2 text-sm text-gray-600">Pay securely with mobile money when you place your order.</p>
             </div>
         </div>
     </section>

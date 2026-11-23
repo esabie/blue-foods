@@ -62,9 +62,20 @@ test('a customer can buy online end to end with the sandbox provider', function 
         ->assertRedirect(route('shop.payments.return', $payment->reference));
     $this->get(route('shop.payments.return', $payment->reference))->assertRedirect($payment->order->statusUrl());
 
-    expect($payment->order->fresh()->status)->toBe(OrderStatus::Paid)
+    $order = $payment->order->fresh();
+    expect($order->status)->toBe(OrderStatus::Paid)
         ->and(soldOnline())->toBe(2);
-    Queue::assertPushed(SendSms::class);
+    Queue::assertPushed(
+        SendSms::class,
+        fn ($job) => $job->to === '+233241234567'
+            && $job->message === 'Hi Efua, order '.$order->reference.' received (GHS 50.00). Complete payment to confirm. Track at '.route('shop.track')
+            && ! str_contains($job->message, $order->access_token)
+    );
+    Queue::assertPushed(
+        SendSms::class,
+        fn ($job) => $job->to === '+233241234567'
+            && $job->message === "Hi Efua, payment received for order {$order->reference} (GHS 50.00). Blue Foods will share delivery updates."
+    );
 });
 
 test('a declined payment leaves the order unpaid and the customer can retry while stock is held', function () {
@@ -75,11 +86,13 @@ test('a declined payment leaves the order unpaid and the customer can retry whil
     expect($payment->fresh()->status)->toBe(PaymentStatus::Failed)
         ->and($order->fresh()->status)->toBe(OrderStatus::PendingPayment);
 
-    $this->post(route('shop.orders.pay', $order->reference), ['token' => $order->access_token])
-        ->assertRedirect();
+    app(\App\Services\Shop\OrderAccess::class)->grant($order);
+
+    $this->post(route('shop.orders.pay', $order->reference))->assertRedirect();
     expect($order->payments()->count())->toBe(2);
 
-    $this->post(route('shop.orders.pay', $order->reference), ['token' => 'wrong'])->assertNotFound();
+    session()->flush();
+    $this->post(route('shop.orders.pay', $order->reference))->assertNotFound();
 });
 
 test('the sandbox provider is unavailable when a real provider is configured', function () {
@@ -163,30 +176,28 @@ test('Paystack checkout is started with the order amount in pesewas', function (
     $this->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 2]);
     $this->post(route('checkout.store'), [
         'customer_name' => 'Yaw', 'phone' => '0201234567', 'delivery_method' => 'delivery',
-        'address' => 'East Legon', 'payment_method' => 'card',
+        'address' => 'East Legon', 'payment_method' => 'mobile_money',
     ])->assertRedirect('https://checkout.paystack.com/abc');
 
     Http::assertSent(fn ($request) => $request['amount'] === 5000 + 2000
         && $request['currency'] === 'GHS'
-        && $request['channels'] === ['card']
+        && $request['channels'] === ['mobile_money']
         && $request['reference'] === Payment::sole()->reference);
 });
 
-test('pay on delivery skips the provider and sends an SMS', function () {
+test('card and pay on delivery are not offered at checkout', function () {
+    $this->get(route('checkout.show'))->assertRedirect(); // empty cart
+
     $this->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 1]);
-    $this->post(route('checkout.store'), [
-        'customer_name' => 'Ama', 'phone' => '0551234567', 'delivery_method' => 'collection', 'payment_method' => 'pay_on_delivery',
-    ])->assertRedirect(OnlineOrder::sole()->statusUrl());
+    $this->get(route('checkout.show'))
+        ->assertOk()
+        ->assertSee('Mobile money')
+        ->assertDontSee('Pay on delivery')
+        ->assertDontSee('>Card<', false);
 
-    expect(Payment::count())->toBe(0);
-    Queue::assertPushed(SendSms::class, fn ($job) => $job->to === '+233551234567');
-});
-
-test('payment methods not offered (Q4) are refused at checkout', function () {
-    config(['shop.payment_methods' => ['mobile_money']]);
-    $this->post(route('cart.add'), ['product_id' => $this->w->product->id, 'quantity' => 1]);
-
-    $this->post(route('checkout.store'), [
-        'customer_name' => 'Ama', 'phone' => '0551234567', 'delivery_method' => 'collection', 'payment_method' => 'card',
-    ])->assertSessionHasErrors('payment_method');
+    foreach (['card', 'pay_on_delivery'] as $method) {
+        $this->post(route('checkout.store'), [
+            'customer_name' => 'Ama', 'phone' => '0551234567', 'delivery_method' => 'collection', 'payment_method' => $method,
+        ])->assertSessionHasErrors('payment_method');
+    }
 });

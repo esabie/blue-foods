@@ -35,5 +35,8 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="SMS_DRIVER" value="log"/>
+        <env name="STAFF_SMS_ALERTS" value="false"/>
+        <env name="PAYMENT_DRIVER" value="sandbox"/>
     </php>
 </phpunit>

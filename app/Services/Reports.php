@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Enums\StockRequestStatus;
 use App\Models\CashHandIn;
+use App\Models\StockRequest;
 use App\Support\MetricFilter;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
@@ -20,6 +22,7 @@ class Reports
         'team-performance' => 'Marketing team performance',
         'stock-position' => 'Stock position',
         'stock-movement' => 'Stock movement',
+        'stock-requests' => 'Stock requests',
         'cash-hand-ins' => 'Cash hand-ins',
     ];
 
@@ -45,6 +48,7 @@ class Reports
             'team-performance' => $this->teamPerformance($f),
             'stock-position' => $this->stockPosition($f),
             'stock-movement' => $this->stockMovement($f),
+            'stock-requests' => $this->stockRequests($f),
             'cash-hand-ins' => $this->cashHandIns($f),
             default => throw new InvalidArgumentException("Unknown report {$type}"),
         };
@@ -229,6 +233,48 @@ class Reports
             ],
             'rows' => $this->metrics->recentMovements($f, 0)->all(),
             'totals' => null,
+        ];
+    }
+
+    /**
+     * Team stock requests in the period, oldest first. Assigned quantity is blank until confirmed.
+     */
+    private function stockRequests(MetricFilter $f): array
+    {
+        $rows = StockRequest::with(['member:id,name', 'product:id,name,unit', 'decider:id,name', 'movement:id,quantity'])
+            ->whereBetween('requested_at', [$f->from, $f->to])
+            ->when($f->productIds, fn ($q, $ids) => $q->whereIn('product_id', $ids))
+            ->orderBy('requested_at')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (StockRequest $r) => [
+                'requested_at' => $r->requested_at->toIso8601String(),
+                'member' => $r->member->name,
+                'product' => $r->product->name,
+                'requested' => $r->quantity,
+                'assigned' => $r->status === StockRequestStatus::Confirmed ? ($r->movement?->quantity ?? $r->quantity) : null,
+                'status' => $r->status->value,
+                'decided_by' => $r->decider?->name,
+                'note' => $r->decision_note ?? $r->member_note,
+            ]);
+
+        return [
+            'columns' => [
+                ['key' => 'requested_at', 'label' => 'Requested', 'format' => 'datetime'],
+                ['key' => 'member', 'label' => 'Team member', 'format' => 'text'],
+                ['key' => 'product', 'label' => 'Product', 'format' => 'text'],
+                ['key' => 'requested', 'label' => 'Asked for', 'format' => 'int'],
+                ['key' => 'assigned', 'label' => 'Assigned', 'format' => 'int'],
+                ['key' => 'status', 'label' => 'Status', 'format' => 'text'],
+                ['key' => 'decided_by', 'label' => 'Decided by', 'format' => 'text'],
+                ['key' => 'note', 'label' => 'Note', 'format' => 'text'],
+            ],
+            'rows' => $rows->all(),
+            'totals' => [
+                'requested_at' => 'Total',
+                'requested' => (int) $rows->sum('requested'),
+                'assigned' => (int) $rows->sum('assigned'),
+            ],
         ];
     }
 

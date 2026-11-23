@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use LogicException;
 
 class Product extends Model
@@ -91,5 +92,30 @@ class Product extends Model
     public function scopeSellable(Builder $query): void
     {
         $query->active()->whereHas('currentPrice')->with('currentPrice');
+    }
+
+    /**
+     * Build a unique SKU from the product name, e.g. "Smoked tilapia" → BF-SMO-TIL.
+     */
+    public static function generateSku(string $name): string
+    {
+        $parts = collect(preg_split('/\s+/', trim($name)) ?: [])
+            ->map(fn (string $word) => Str::upper(Str::substr(preg_replace('/[^A-Za-z0-9]/', '', $word) ?? '', 0, 3)))
+            ->filter(fn (string $part) => $part !== '')
+            ->take(3)
+            ->values();
+
+        $base = $parts->isEmpty()
+            ? 'BF-'.now()->format('ymd')
+            : 'BF-'.$parts->implode('-');
+
+        $sku = $base;
+        $n = 2;
+        while (static::where('sku', $sku)->exists()) {
+            $sku = $base.'-'.$n;
+            $n++;
+        }
+
+        return Str::limit($sku, 50, '');
     }
 }

@@ -109,7 +109,7 @@ test('W4: order total = sum of item totals + delivery fee; collection has no fee
         ->and($delivered->total_pesewas)->toBe(3 * 2500 + 2 * 1299 + 1550)
         ->and($delivered->items->sum('total_pesewas'))->toBe($delivered->subtotal_pesewas);
 
-    $collected = placeOnlineOrder([$second->id => 1], 'card', 'collection');
+    $collected = placeOnlineOrder([$second->id => 1], 'mobile_money', 'collection');
     expect($collected->delivery_fee_pesewas)->toBe(0)->and($collected->total_pesewas)->toBe(1299)->and($collected->address)->toBeNull();
 });
 
@@ -271,6 +271,34 @@ test('W9: pay on delivery reserves stock at order time and sells when cash is re
         ->and($order->isPaid())->toBeTrue()
         ->and(onlineBalance())->toBe(7)
         ->and($order->payments()->sole()->amount_pesewas)->toBe($order->total_pesewas);
+
+    $name = strtok(trim($order->customer_name), ' ') ?: 'there';
+    Queue::assertPushed(
+        SendSms::class,
+        fn ($job) => $job->to === $order->phone
+            && $job->message === "Hi {$name}, payment received for order {$order->reference} (".\App\Support\Money::format($order->total_pesewas).'). Blue Foods will share delivery updates.'
+    );
+});
+
+test('management can approve an awaiting online payment and the customer is texted', function () {
+    $order = placeOnlineOrder([$this->w->product->id => 2]);
+    expect($order->phone)->toBe('+233241234567');
+
+    $this->actingAs($this->w->warehouse)->post(route('orders.approve-payment', $order))->assertForbidden();
+
+    $this->actingAs($this->w->manager)->post(route('orders.approve-payment', $order))->assertSessionHasNoErrors();
+
+    $order->refresh();
+    expect($order->status)->toBe(OrderStatus::Paid)
+        ->and($order->isPaid())->toBeTrue()
+        ->and(soldOnline())->toBe(2);
+
+    $name = strtok(trim($order->customer_name), ' ') ?: 'there';
+    Queue::assertPushed(
+        SendSms::class,
+        fn ($job) => $job->to === '+233241234567'
+            && $job->message === "Hi {$name}, payment received for order {$order->reference} (".\App\Support\Money::format($order->total_pesewas).'). Blue Foods will share delivery updates.'
+    );
 });
 
 test('management can cancel an unpaid order and its stock is released', function () {
@@ -289,12 +317,53 @@ test('paid orders cannot be cancelled', function () {
     $this->actingAs($this->w->manager)->post(route('orders.cancel', $order))->assertSessionHasErrors('order');
 });
 
-test('the order status page needs the secret token', function () {
+test('the order status page needs session access (no secrets in the URL)', function () {
     $order = placeOnlineOrder([$this->w->product->id => 1]);
 
-    $this->get(route('shop.orders.show', ['order' => $order->reference]))->assertNotFound();
+    $this->get(route('shop.orders.show', $order->reference))->assertNotFound();
     $this->get(route('shop.orders.show', ['order' => $order->reference, 'token' => 'wrong']))->assertNotFound();
+
+    $this->get(route('shop.orders.show', ['order' => $order->reference, 'token' => $order->access_token]))
+        ->assertRedirect($order->statusUrl());
+
     $this->get($order->statusUrl())->assertOk()->assertSee($order->reference)->assertSee('GHS 45.00');
+    expect($order->statusUrl())->not->toContain('token=')->not->toContain($order->access_token);
+});
+
+test('customers can track an order with the reference and phone from checkout', function () {
+    $order = placeOnlineOrder([$this->w->product->id => 1]);
+
+    $this->get(route('shop.track'))->assertOk()->assertSee('Track your order');
+
+    $this->post(route('shop.track.lookup'), [
+        'reference' => strtolower($order->reference),
+        'phone' => '024 123 4567',
+    ])->assertRedirect($order->statusUrl());
+
+    $this->get($order->statusUrl())->assertOk()->assertSee($order->reference);
+
+    $this->post(route('shop.track.lookup'), [
+        'reference' => $order->reference,
+        'phone' => '024 999 9999',
+    ])->assertSessionHasErrors('reference');
+
+    $this->post(route('shop.track.lookup'), [
+        'reference' => 'BF000000XXXX',
+        'phone' => '024 123 4567',
+    ])->assertSessionHasErrors('reference');
+});
+
+test('placing an order texts the public track page, not a secret link', function () {
+    $order = placeOnlineOrder([$this->w->product->id => 1]);
+    $name = strtok(trim($order->customer_name), ' ') ?: 'there';
+    $track = route('shop.track');
+
+    Queue::assertPushed(
+        SendSms::class,
+        fn ($job) => $job->to === $order->phone
+            && $job->message === "Hi {$name}, order {$order->reference} received (".\App\Support\Money::format($order->total_pesewas).'). Complete payment to confirm. Track at '.$track
+            && ! str_contains($job->message, $order->access_token)
+    );
 });
 
 test('online sales keep rule B6 balanced', function () {

@@ -11,6 +11,7 @@ use App\Models\SiteSetting;
 use App\Services\Payments\PaymentGateway;
 use App\Services\Shop\Cart;
 use App\Services\Shop\OnlineShop;
+use App\Services\Shop\OrderAccess;
 use App\Support\Phone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +23,11 @@ class CheckoutController extends Controller
 {
     use RespondsWithCartDrawer;
 
-    public function __construct(private readonly Cart $cart, private readonly OnlineShop $shop) {}
+    public function __construct(
+        private readonly Cart $cart,
+        private readonly OnlineShop $shop,
+        private readonly OrderAccess $access,
+    ) {}
 
     public function cart(): View
     {
@@ -95,6 +100,7 @@ class CheckoutController extends Controller
 
         $order = $this->shop->placeOrder($this->cart->raw(), $data);
         $this->cart->clear();
+        $this->access->grant($order);
 
         if (! $order->payment_method->isOnline()) {
             return redirect()->to($order->statusUrl())->with('status', 'Thank you. Your order is reserved; pay when you receive it.');

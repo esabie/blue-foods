@@ -20,6 +20,9 @@ pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
 
+pest()->extend(TestCase::class)
+    ->in('Unit');
+
 // Concurrency tests run real parallel processes against MySQL, so they manage their own database.
 pest()->extend(TestCase::class)
     ->in('Concurrency');

@@ -193,8 +193,9 @@ class DemoHistorySeeder extends Seeder
         ];
         $paid = $shop->placeOrder([$tilapia->id => 2, $mackerel->id => 1], $customer('Esi Badu', 'mobile_money', 'delivery'));
         $shop->confirmPayment($shop->startPayment($paid, 'sandbox'), 'DEMO-TODAY-1', $paid->total_pesewas);
-        $shop->placeOrder([$mackerel->id => 2], $customer('Kwesi Appiah', 'pay_on_delivery', 'collection'));
-        $packed = $shop->placeOrder([$tilapia->id => 1], $customer('Afua Sarpong', 'card', 'delivery'));
+        $collected = $shop->placeOrder([$mackerel->id => 2], $customer('Kwesi Appiah', 'mobile_money', 'collection'));
+        $shop->confirmPayment($shop->startPayment($collected, 'sandbox'), 'DEMO-TODAY-3', $collected->total_pesewas);
+        $packed = $shop->placeOrder([$tilapia->id => 1], $customer('Afua Sarpong', 'mobile_money', 'delivery'));
         $shop->confirmPayment($shop->startPayment($packed, 'sandbox'), 'DEMO-TODAY-2', $packed->total_pesewas);
         $shop->pack($packed->fresh(), $warehouse);
 
@@ -216,12 +217,7 @@ class DemoHistorySeeder extends Seeder
             return;
         }
 
-        $roll = mt_rand(1, 10);
-        $method = match (true) {
-            $roll <= 5 => 'mobile_money',
-            $roll <= 7 => 'card',
-            default => 'pay_on_delivery',
-        };
+        $method = 'mobile_money';
         $delivery = mt_rand(1, 3) === 1 ? 'collection' : 'delivery';
         $names = ['Efua Mensah', 'Kojo Antwi', 'Akosua Darko', 'Yaw Owusu', 'Abena Ofori', 'Kwame Asare', 'Adwoa Boakye', 'Nana Addo'];
 
@@ -237,20 +233,18 @@ class DemoHistorySeeder extends Seeder
             return;
         }
 
-        if ($method !== 'pay_on_delivery') {
-            if (mt_rand(1, 8) === 1) {
-                return; // abandoned at the payment page; released after 15 minutes
-            }
-            $payment = $shop->startPayment($order, 'sandbox');
-            Carbon::setTestNow(now()->addMinutes(mt_rand(1, 6)));
-            $shop->confirmPayment($payment, 'DEMO-'.$payment->id, $payment->amount_pesewas);
+        if (mt_rand(1, 8) === 1) {
+            return; // abandoned at the payment page; released after 15 minutes
         }
+        $payment = $shop->startPayment($order, 'sandbox');
+        Carbon::setTestNow(now()->addMinutes(mt_rand(1, 6)));
+        $shop->confirmPayment($payment, 'DEMO-'.$payment->id, $payment->amount_pesewas);
 
         Carbon::setTestNow(now()->addHours(mt_rand(1, 2)));
         $order->refresh();
         $shop->pack($order, $warehouse);
         Carbon::setTestNow(now()->addHours(mt_rand(1, 4)));
         $order->refresh();
-        $shop->complete($order, $warehouse, cashReceived: $order->status === OrderStatus::Packed && ! $order->isPaid());
+        $shop->complete($order, $warehouse);
     }
 }

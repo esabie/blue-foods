@@ -70,8 +70,12 @@ class OnlineOrder extends Model
                 ->orWhere('reserved_until', '>', now()));
     }
 
+    /**
+     * Public status page (no secrets in the URL). Access is via session after
+     * checkout, payment return, track lookup, or a one-time token redeem.
+     */
     public function statusUrl(): string
     {
-        return route('shop.orders.show', ['order' => $this->reference, 'token' => $this->access_token]);
+        return route('shop.orders.show', $this->reference);
     }
 }

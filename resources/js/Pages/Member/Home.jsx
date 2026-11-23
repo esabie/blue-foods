@@ -9,10 +9,24 @@ import { formatDate, formatDateTime, formatGhs } from '@/lib/format';
 import { Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function MemberHome({ stock, today, month_revenue_pesewas, cash, pendingReturns, recentSales, recentHandIns }) {
+export default function MemberHome({
+    stock,
+    today,
+    month_revenue_pesewas,
+    cash,
+    pendingReturns,
+    pendingStockRequests,
+    recentStockDecisions,
+    requestableProducts,
+    stockSuggestions,
+    recentSales,
+    recentHandIns,
+}) {
     const [recording, setRecording] = useState(false);
     const [returning, setReturning] = useState(null);
+    const [requestingProductId, setRequestingProductId] = useState(null);
     const sellable = stock.filter((s) => s.available > 0);
+    const requesting = requestingProductId !== null;
 
     if (recording) {
         return <RecordSale stock={sellable} onDone={() => setRecording(false)} />;
@@ -20,13 +34,52 @@ export default function MemberHome({ stock, today, month_revenue_pesewas, cash, 
 
     return (
         <PageShell title="My stock">
-            <PrimaryButton
-                className="w-full justify-center py-4 text-sm"
-                disabled={sellable.length === 0}
-                onClick={() => setRecording(true)}
-            >
-                Record a sale
-            </PrimaryButton>
+            <div className="flex flex-col gap-2 sm:flex-row">
+                <PrimaryButton
+                    className="w-full justify-center py-4 text-sm sm:flex-1"
+                    disabled={sellable.length === 0}
+                    onClick={() => setRecording(true)}
+                >
+                    Record a sale
+                </PrimaryButton>
+                <SecondaryButton
+                    className="w-full justify-center py-4 text-sm sm:flex-1"
+                    disabled={cash.overdue || requestableProducts.length === 0}
+                    onClick={() => setRequestingProductId(requestableProducts[0]?.id ?? '')}
+                >
+                    Request stock
+                </SecondaryButton>
+            </div>
+            {cash.overdue && (
+                <p className="text-sm text-amber-800">
+                    Hand in your overdue cash before requesting more stock.
+                </p>
+            )}
+
+            {!cash.overdue && stockSuggestions.length > 0 && (
+                <Card title="Running low — request more?">
+                    <ul className="divide-y divide-gray-100 text-sm">
+                        {stockSuggestions.map((p) => (
+                            <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                                <div>
+                                    <div className="font-medium text-gray-900">{p.name}</div>
+                                    <div className="text-xs text-gray-500">
+                                        {p.held_available} {p.unit} left
+                                        {p.unassigned > 0 ? ` · ${p.unassigned} in warehouse` : ' · none in warehouse'}
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="shrink-0 font-medium text-sky-700 hover:underline"
+                                    onClick={() => setRequestingProductId(p.id)}
+                                >
+                                    Request
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </Card>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
                 <div className="col-span-2">
@@ -93,6 +146,43 @@ export default function MemberHome({ stock, today, month_revenue_pesewas, cash, 
                 </Card>
             )}
 
+            {pendingStockRequests.length > 0 && (
+                <Card title="Stock requests waiting for the warehouse">
+                    <ul className="divide-y divide-gray-100 text-sm">
+                        {pendingStockRequests.map((r) => (
+                            <li key={r.id} className="flex justify-between gap-3 px-4 py-3">
+                                <div>
+                                    <div>{r.quantity} {r.unit} of {r.product}</div>
+                                    {r.member_note && <div className="text-xs text-gray-500">{r.member_note}</div>}
+                                </div>
+                                <span className="shrink-0 text-gray-500">{formatDateTime(r.requested_at)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </Card>
+            )}
+
+            {recentStockDecisions.length > 0 && (
+                <Card title="Recent stock request replies">
+                    <ul className="divide-y divide-gray-100 text-sm">
+                        {recentStockDecisions.map((r) => (
+                            <li key={r.id} className="px-4 py-3">
+                                <div className="flex justify-between gap-3">
+                                    <span>
+                                        {r.quantity} {r.unit} of {r.product}
+                                        <span className={'ms-2 ' + (r.status === 'confirmed' ? 'text-emerald-700' : 'text-gray-500')}>
+                                            {r.status === 'confirmed' ? 'assigned' : 'declined'}
+                                        </span>
+                                    </span>
+                                    <span className="shrink-0 text-gray-500">{formatDateTime(r.decided_at)}</span>
+                                </div>
+                                {r.decision_note && <div className="mt-1 text-xs text-gray-600">{r.decision_note}</div>}
+                            </li>
+                        ))}
+                    </ul>
+                </Card>
+            )}
+
             <Card title="Recent sales">
                 {recentSales.length === 0 && <p className="p-4 text-sm text-gray-500">No sales yet.</p>}
                 <ul className="divide-y divide-gray-100 text-sm">
@@ -133,6 +223,13 @@ export default function MemberHome({ stock, today, month_revenue_pesewas, cash, 
             </Card>
 
             {returning && <ReturnModal item={returning} onClose={() => setReturning(null)} />}
+            {requesting && (
+                <RequestStockModal
+                    products={requestableProducts}
+                    initialProductId={requestingProductId}
+                    onClose={() => setRequestingProductId(null)}
+                />
+            )}
         </PageShell>
     );
 }
@@ -259,6 +356,62 @@ function ReturnModal({ item, onClose }) {
             <Field label="Quantity to return" htmlFor="return_qty" error={form.errors.quantity} hint={`You can return up to ${item.available}`}>
                 <TextInput id="return_qty" type="number" inputMode="numeric" min="1" max={item.available} className="block w-full"
                     value={form.data.quantity} onChange={(e) => form.setData('quantity', e.target.value)} />
+            </Field>
+        </FormModal>
+    );
+}
+
+function RequestStockModal({ products, initialProductId, onClose }) {
+    const form = useForm({
+        product_id: initialProductId || products[0]?.id || '',
+        quantity: '1',
+        note: '',
+    });
+    const product = products.find((p) => String(p.id) === String(form.data.product_id));
+
+    const submit = (e) => {
+        e.preventDefault();
+        form.post(route('member.stock-requests.store'), { onSuccess: onClose });
+    };
+
+    return (
+        <FormModal show onClose={onClose} title="Request stock" onSubmit={submit} processing={form.processing} submitLabel="Send request">
+            <p className="text-sm text-gray-600">
+                The warehouse will check unassigned stock and assign it to you, or reply if they cannot yet.
+            </p>
+            <Field label="Product" htmlFor="request_product" error={form.errors.product_id}>
+                <SelectInput
+                    id="request_product"
+                    className="block w-full"
+                    value={form.data.product_id}
+                    onChange={(e) => form.setData('product_id', e.target.value)}
+                >
+                    {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                            {p.name}
+                            {p.unassigned > 0 ? ` (${p.unassigned} in warehouse)` : ' (none in warehouse)'}
+                        </option>
+                    ))}
+                </SelectInput>
+            </Field>
+            <Field label="Quantity" htmlFor="request_qty" error={form.errors.quantity} hint={product ? `In ${product.unit}` : null}>
+                <TextInput
+                    id="request_qty"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    className="block w-full"
+                    value={form.data.quantity}
+                    onChange={(e) => form.setData('quantity', e.target.value)}
+                />
+            </Field>
+            <Field label="Note for the warehouse (optional)" htmlFor="request_note" error={form.errors.note}>
+                <TextInput
+                    id="request_note"
+                    className="block w-full"
+                    value={form.data.note}
+                    onChange={(e) => form.setData('note', e.target.value)}
+                />
             </Field>
         </FormModal>
     );

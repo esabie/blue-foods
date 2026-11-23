@@ -39,7 +39,25 @@ return [
     ],
 
     'sms' => [
+        // log (local) or mnotify
         'driver' => env('SMS_DRIVER', 'log'),
+        'mnotify' => [
+            'key' => env('MNOTIFY_API_KEY'),
+            'sender' => env('MNOTIFY_SENDER', 'BLUE FOODS'),
+            'base_url' => env('MNOTIFY_BASE_URL', 'https://api.mnotify.com/api'),
+        ],
+        /*
+        | Also text staff for high-priority bell alerts (demo / off-desk).
+        | Turn off or narrow STAFF_SMS_ALERT_TYPES when you need to save credits.
+        */
+        'staff_alerts' => (bool) env('STAFF_SMS_ALERTS', false),
+        'staff_alert_types' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env(
+                'STAFF_SMS_ALERT_TYPES',
+                'order_to_pack,refund_needed,low_stock,lot_expired,return_requested,stock_requested,stock_request_declined,stock_request_fulfilled',
+            )),
+        ))),
     ],
 
     'slack' => [

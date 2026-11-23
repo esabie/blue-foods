@@ -13,9 +13,10 @@ return [
     'low_stock_threshold' => 100,
 
     /*
-    | Open question Q4: which payment methods are offered at checkout.
+    | Payment methods offered at checkout. Blue Foods takes mobile money only.
+    | Older enum values (card, pay_on_delivery) remain for historical orders.
     */
-    'payment_methods' => array_filter(explode(',', env('SHOP_PAYMENT_METHODS', 'mobile_money,card,pay_on_delivery'))),
+    'payment_methods' => array_filter(explode(',', env('SHOP_PAYMENT_METHODS', 'mobile_money'))),
 
     /*
     | Payment providers need an email; customers only give a phone number.

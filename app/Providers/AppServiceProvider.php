@@ -10,6 +10,7 @@ use App\Services\Payments\PaystackGateway;
 use App\Services\Payments\SandboxGateway;
 use App\Services\Shop\Cart;
 use App\Services\Sms\LogSmsSender;
+use App\Services\Sms\MnotifySmsSender;
 use App\Services\Sms\SmsSender;
 use App\Services\StaffNotifier;
 use Illuminate\Support\Facades\Gate;
@@ -37,7 +38,15 @@ class AppServiceProvider extends ServiceProvider
             default => throw new InvalidArgumentException('Unknown payment driver.'),
         });
 
-        $this->app->bind(SmsSender::class, LogSmsSender::class);
+        $this->app->bind(SmsSender::class, fn () => match (config('services.sms.driver')) {
+            'mnotify' => new MnotifySmsSender(
+                (string) config('services.sms.mnotify.key'),
+                (string) config('services.sms.mnotify.sender'),
+                (string) config('services.sms.mnotify.base_url'),
+            ),
+            'log' => new LogSmsSender,
+            default => throw new InvalidArgumentException('Unknown SMS driver.'),
+        });
 
         // One instance per request, so StaffNotifier::quietly() covers every service that sends.
         $this->app->scoped(StaffNotifier::class);

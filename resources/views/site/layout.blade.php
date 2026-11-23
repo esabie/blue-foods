@@ -12,6 +12,7 @@
     <meta property="og:description" content="{{ trim($__env->yieldContent('description')) ?: $site['seo_description'] }}">
     @hasSection('og_image')<meta property="og:image" content="@yield('og_image')">@endif
     @hasSection('robots')<meta name="robots" content="@yield('robots')">@endif
+    @hasSection('referrer')<meta name="referrer" content="@yield('referrer')">@endif
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700|fraunces:500,600,700&display=swap" rel="stylesheet">
     @vite(['resources/css/site.css', 'resources/js/site.js'])
@@ -24,10 +25,10 @@
                 <span class="max-[399px]:sr-only">Blue Foods</span>
             </a>
             <nav class="flex min-w-0 items-center gap-0.5 text-sm font-medium sm:gap-4">
-                @foreach (['site.home' => 'Home', 'shop.index' => 'Shop', 'site.about' => 'About us', 'site.contact' => 'Contact'] as $name => $label)
+                @foreach (['site.home' => 'Home', 'shop.index' => 'Shop', 'shop.track' => 'Track', 'site.about' => 'About us', 'site.contact' => 'Contact'] as $name => $label)
                     <a href="{{ route($name) }}" @class([
                         'whitespace-nowrap rounded px-1 py-1 sm:px-2',
-                        'hidden sm:inline' => $name === 'site.home',
+                        'hidden sm:inline' => in_array($name, ['site.home', 'site.about'], true),
                         'text-sky-800 underline underline-offset-8 decoration-2' => request()->routeIs($name) || ($name === 'shop.index' && request()->routeIs('shop.show')),
                         'text-gray-600 hover:text-sky-800' => ! (request()->routeIs($name) || ($name === 'shop.index' && request()->routeIs('shop.show'))),
                     ])>{{ $label }}</a>
@@ -62,25 +63,49 @@
         @yield('content')
     </main>
 
-    <footer class="mt-16 border-t border-gray-100 bg-gray-50">
-        <div class="mx-auto grid max-w-6xl gap-6 px-4 py-10 text-sm text-gray-600 sm:grid-cols-3 sm:px-6">
-            <div>
-                <p class="font-semibold text-gray-800">Blue Foods</p>
-                <p class="mt-2">{{ $site['contact_address'] }}</p>
+    <footer class="mt-16 border-t border-sky-950/10 bg-[var(--bf-sand)]">
+        <div class="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:gap-8">
+            <div class="sm:col-span-2 lg:col-span-1">
+                <a href="{{ route('site.home') }}" class="inline-flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-sky-950">
+                    <svg class="h-8 w-8 text-sky-800" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M3 16c4-6 10-8 15-6l6-5v8l5 3-5 3v8l-6-5c-5 2-11 0-15-6z" fill="currentColor"/><circle cx="11" cy="15" r="1.5" fill="#fff"/></svg>
+                    Blue Foods
+                </a>
+                <p class="mt-3 max-w-xs text-sm leading-relaxed text-gray-600">{{ $site['contact_address'] }}</p>
             </div>
             <div>
-                <p class="font-semibold text-gray-800">Contact</p>
-                <p class="mt-2"><a href="tel:{{ preg_replace('/[^\d+]/', '', $site['contact_phone']) }}" class="hover:text-sky-800">{{ $site['contact_phone'] }}</a></p>
-                <p><a href="mailto:{{ $site['contact_email'] }}" class="hover:text-sky-800">{{ $site['contact_email'] }}</a></p>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-sky-800/70">Explore</p>
+                <ul class="mt-3 space-y-2 text-sm">
+                    @foreach (['shop.index' => 'Shop', 'shop.track' => 'Track order', 'site.about' => 'About us', 'site.contact' => 'Contact', 'site.faq' => 'FAQ'] as $name => $label)
+                        <li><a href="{{ route($name) }}" class="font-medium text-sky-950 transition hover:text-sky-700">{{ $label }}</a></li>
+                    @endforeach
+                </ul>
             </div>
             <div>
-                <p class="font-semibold text-gray-800">Opening hours</p>
-                <p class="mt-2">{{ $site['contact_hours'] }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-sky-800/70">Contact</p>
+                <ul class="mt-3 space-y-2 text-sm text-gray-600">
+                    <li>
+                        <a href="tel:{{ preg_replace('/[^\d+]/', '', $site['contact_phone']) }}" class="font-medium text-sky-950 transition hover:text-sky-700">{{ $site['contact_phone'] }}</a>
+                    </li>
+                    <li>
+                        <a href="mailto:{{ $site['contact_email'] }}" class="transition hover:text-sky-800">{{ $site['contact_email'] }}</a>
+                    </li>
+                </ul>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-sky-800/70">Opening hours</p>
+                <p class="mt-3 whitespace-pre-line text-sm leading-relaxed text-gray-600">{{ $site['contact_hours'] }}</p>
             </div>
         </div>
-        <div class="border-t border-gray-100 py-4 text-center text-xs text-gray-400">
-            &copy; {{ now()->year }} Blue Foods.
-            <a href="{{ route('login') }}" class="ml-2 hover:text-gray-600">Staff sign in</a>
+        <div class="border-t border-sky-950/10">
+            <div class="mx-auto flex max-w-6xl flex-col items-start justify-between gap-3 px-4 py-4 text-xs text-gray-500 sm:flex-row sm:items-center sm:px-6">
+                <p>&copy; {{ now()->year }} Blue Foods</p>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <a href="{{ route('site.privacy') }}" class="transition hover:text-sky-800">Privacy</a>
+                    <a href="{{ route('site.terms') }}" class="transition hover:text-sky-800">Terms</a>
+                    <a href="{{ route('site.faq') }}" class="transition hover:text-sky-800">FAQ</a>
+                    <a href="{{ route('login') }}" class="transition hover:text-sky-800">Staff sign in</a>
+                </div>
+            </div>
         </div>
     </footer>
 

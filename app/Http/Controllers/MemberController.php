@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ReturnStatus;
+use App\Enums\StockRequestStatus;
 use App\Models\CashHandIn;
+use App\Models\Location;
 use App\Models\Product;
 use App\Models\ReturnRequest;
 use App\Models\Sale;
+use App\Models\StockRequest;
 use App\Services\CashBook;
 use App\Services\StockLedger;
 use App\Services\StockPosition;
@@ -35,6 +38,39 @@ class MemberController extends Controller
             ->where('member_user_id', $member->id)
             ->where('status', ReturnStatus::Requested)
             ->get();
+
+        $pendingStockRequests = StockRequest::with('product:id,name,unit')
+            ->where('member_user_id', $member->id)
+            ->where('status', StockRequestStatus::Requested)
+            ->oldest('requested_at')
+            ->get();
+
+        $recentStockDecisions = StockRequest::with('product:id,name,unit')
+            ->where('member_user_id', $member->id)
+            ->where('status', '!=', StockRequestStatus::Requested)
+            ->latest('confirmed_at')
+            ->limit(5)
+            ->get();
+
+        $warehouseId = Location::warehouse()->id;
+        $pendingRequestProductIds = $pendingStockRequests->pluck('product_id')->all();
+        $lowThreshold = 2;
+        $requestable = Product::sellable()->orderBy('name')->get()->map(function (Product $p) use ($warehouseId, $holdings, $pending, $pendingRequestProductIds, $lowThreshold) {
+            $held = (int) ($holdings->firstWhere('product_id', $p->id)?->quantity ?? 0);
+            $pendingReturn = (int) $pending->where('product_id', $p->id)->sum('quantity');
+            $available = $held - $pendingReturn;
+
+            return [
+                'id' => $p->id,
+                'name' => $p->name,
+                'unit' => $p->unit,
+                'unassigned' => $this->ledger->balance($p->id, $warehouseId),
+                'held_available' => $available,
+                // Only nudge when they already hold the product and are running low.
+                'suggest' => $held > 0 && $available <= $lowThreshold && ! in_array($p->id, $pendingRequestProductIds, true),
+            ];
+        });
+        $suggestions = $requestable->filter(fn ($p) => $p['suggest'])->values();
 
         $today = Sale::where('member_user_id', $member->id)
             ->notReversed()
@@ -66,6 +102,8 @@ class MemberController extends Controller
                 'owing_since' => $owingSince?->toIso8601String(),
                 'overdue' => $owingSince !== null && $owingSince->lt($cash->dueBefore()),
             ],
+            'requestableProducts' => $requestable->values(),
+            'stockSuggestions' => $suggestions,
             'recentHandIns' => CashHandIn::with(['member:id,name', 'receiver:id,name', 'cancellation.canceller:id,name'])
                 ->where('member_user_id', $member->id)
                 ->latest('id')
@@ -78,6 +116,23 @@ class MemberController extends Controller
                 'unit' => $r->product->unit,
                 'quantity' => $r->quantity,
                 'requested_at' => $r->requested_at->toIso8601String(),
+            ]),
+            'pendingStockRequests' => $pendingStockRequests->map(fn (StockRequest $r) => [
+                'id' => $r->id,
+                'product' => $r->product->name,
+                'unit' => $r->product->unit,
+                'quantity' => $r->quantity,
+                'member_note' => $r->member_note,
+                'requested_at' => $r->requested_at->toIso8601String(),
+            ]),
+            'recentStockDecisions' => $recentStockDecisions->map(fn (StockRequest $r) => [
+                'id' => $r->id,
+                'product' => $r->product->name,
+                'unit' => $r->product->unit,
+                'quantity' => $r->quantity,
+                'status' => $r->status->value,
+                'decision_note' => $r->decision_note,
+                'decided_at' => $r->confirmed_at?->toIso8601String(),
             ]),
             'recentSales' => Sale::with(['member:id,name', 'product:id,name,unit', 'reversal'])
                 ->where('member_user_id', $member->id)
@@ -129,5 +184,22 @@ class MemberController extends Controller
         $this->ledger->requestReturn($request->user(), $product, $data['quantity']);
 
         return redirect()->route('member.home')->with('success', "Return of {$data['quantity']} {$product->unit} of {$product->name} requested. The warehouse will confirm when received.");
+    }
+
+    public function storeStockRequest(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $product = Product::findOrFail($data['product_id']);
+        $this->ledger->requestStock($request->user(), $product, $data['quantity'], $data['note'] ?? null);
+
+        return redirect()->route('member.home')->with(
+            'success',
+            "Requested {$data['quantity']} {$product->unit} of {$product->name}. The warehouse will review your request.",
+        );
     }
 }

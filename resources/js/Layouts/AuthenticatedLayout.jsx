@@ -9,13 +9,13 @@ import { useEffect, useState } from 'react';
 const NAV = {
     management: [
         [null, [['Dashboards', 'dashboards.overview', 'dashboards.*']]],
-        ['Stock', [['Stock', 'stock.index'], ['Movements', 'stock.movements'], ['Returns', 'returns.index']]],
+        ['Stock', [['Stock', 'stock.index'], ['Lots', 'stock.lots'], ['Movements', 'stock.movements'], ['Stock requests', 'stock-requests.index'], ['Returns', 'returns.index']]],
         ['Sales', [['Online orders', 'orders.index'], ['Sales', 'sales.index'], ['Cash', 'cash.index'], ['Reports', 'reports.show', 'reports.*']]],
-        ['Admin', [['Products', 'products.index'], ['Users', 'users.index'], ['Website', 'website.edit'], ['Audit log', 'audit.index']]],
+        ['Admin', [['Products', 'products.index'], ['Users', 'users.index'], ['Bulk SMS', 'bulk-sms.create'], ['Website', 'website.edit'], ['Audit log', 'audit.index']]],
     ],
     warehouse: [
         [null, [['Dashboard', 'dashboards.stock']]],
-        ['Stock', [['Stock', 'stock.index'], ['Movements', 'stock.movements'], ['Returns', 'returns.index']]],
+        ['Stock', [['Stock', 'stock.index'], ['Lots', 'stock.lots'], ['Movements', 'stock.movements'], ['Stock requests', 'stock-requests.index'], ['Returns', 'returns.index']]],
         ['Online shop', [['Online orders', 'orders.index']]],
     ],
     marketing: [
@@ -97,7 +97,7 @@ function UserMenu({ user }) {
 
 export default function AuthenticatedLayout({ header, children }) {
     const { auth, flash, errors } = usePage().props;
-    const pageError = errors?.return || errors?.user || errors?.order || errors?.payment;
+    const pageError = errors?.return || errors?.user || errors?.order || errors?.payment || errors?.member || errors?.stock_request || errors?.quantity;
     const [menuOpen, setMenuOpen] = useState(false);
 
     useEffect(() => {
